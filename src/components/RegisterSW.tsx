@@ -4,7 +4,16 @@ import { useEffect } from "react";
 
 export function RegisterSW() {
   useEffect(() => {
-    if (!("serviceWorker" in navigator) || process.env.NODE_ENV !== "production") {
+    if (!("serviceWorker" in navigator)) return;
+    if (process.env.NODE_ENV !== "production") {
+      // A prod SW left over on this origin would serve stale caches under the
+      // dev server — evict it entirely.
+      void navigator.serviceWorker.getRegistrations().then((regs) => {
+        for (const r of regs) void r.unregister();
+      });
+      void caches.keys().then((keys) => {
+        for (const k of keys) if (k.startsWith("ref-")) void caches.delete(k);
+      });
       return;
     }
     // A new deploy installs a new SW (stamped version); when it replaces a

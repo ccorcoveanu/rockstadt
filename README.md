@@ -10,6 +10,8 @@ Next.js (App Router, SSR) + Appwrite. The browser only ever talks to the app's o
 - **Tags**: global tags (admin-managed: *Wanna see*, *Must see*, *Maybe*, …) + per-user tags. Filter the calendar by any tag combination; concerts outside the filter dim, overlapping tagged sets glow red (clash detection).
 - **Auth optional**: email+password and Google login via Appwrite. Anonymous users get full functionality stored locally (IndexedDB); on login local tags/assignments merge into the account.
 - **Offline-first PWA**: service worker precaches the shell; schedule/tags/assignments live in IndexedDB (Dexie); offline mutations queue and replay on reconnect with last-write-wins per (concert, tag). Sync state shown in the header.
+- **Saved calendars**: name any tag selection and save it (device-local when anonymous, synced when signed in). One click re-applies it.
+- **Sharing**: a saved calendar gets a revocable link (`/c/<token>`, account required — the server must answer while you're in the pit). The link is live: it always serves the owner's current tags/picks. Visitors get an import popup with a personal-name field; importing clones user tags (matching by slug), maps global tags to themselves, applies the picks, and saves the calendar locally — works for anonymous visitors too.
 - **Admin** (`/admin`): edit the schedule (add/edit/delete sets) and global tags. Gated by membership in the Appwrite `admins` team.
 
 ## Setup
@@ -46,6 +48,7 @@ Appwrite Console → Auth → Settings → enable the **Google** OAuth2 provider
 - `concerts` — band, stageId, day (1–6), date (festival day), startsAt/endsAt (UTC instants; the festival runs entirely in EEST/UTC+3), openEnded (last DJ set has no published end).
 - `tags` — name, slug, color, ownerId (`_global` sentinel = system tag; otherwise the owning user id). Unique index on (ownerId, slug).
 - `tag_assignments` — userId, concertId, tagId, active, clientUpdatedAt. Row id = sha256(user|concert|tag) → idempotent upserts. `active:false` rows are tombstones so offline removals sync; conflict resolution is last-write-wins on `clientUpdatedAt`.
+- `calendars` — ownerId, name, tagIds[], shareToken, shareEnabled. The share endpoint mints a random token once and toggles `shareEnabled`; `/api/shares/[token]` serves a live snapshot only while enabled.
 
 ## Sync design
 
@@ -57,6 +60,10 @@ IndexedDB (Dexie) is the UI's source of truth. Server reconciliation happens in 
 4. On logout, personal data is wiped from the device; global tags and the schedule stay cached.
 
 Timetable source: extracted from the six official poster images (`data/timetable.json`, seeded by `scripts/setup.mjs`; posters also uploaded to the storage bucket and proxied at `/api/posters/[1-6]`).
+
+## Share links and the installed PWA
+
+Share links live under the app's manifest scope, and the manifest sets `launch_handler: navigate-existing`. Where the OS supports link capturing (Android/ChromeOS, desktop Chrome when the user enables "open in app"), tapping a share link opens the installed app; everywhere else (notably iOS) it opens in the browser — which is fully functional, offline-capable, and syncs aggressively: on every mutation, on reconnect, on tab focus/visibility, and every 5 minutes while visible, with last-write-wins reconciliation. There is no web API that can force-open an installed PWA from a browser link.
 
 ## Notes
 

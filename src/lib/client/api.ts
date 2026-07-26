@@ -1,4 +1,11 @@
-import type { Schedule, SessionUser, Tag, TagAssignment } from "../types";
+import type {
+  CalendarSnapshot,
+  SavedCalendar,
+  Schedule,
+  SessionUser,
+  Tag,
+  TagAssignment,
+} from "../types";
 
 export class ApiError extends Error {
   constructor(
@@ -54,6 +61,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ assignments }),
     }),
+  calendars: () => request<{ calendars: SavedCalendar[] }>("/api/calendars"),
+  createCalendar: (name: string, tagIds: string[]) =>
+    request<{ calendar: SavedCalendar }>("/api/calendars", {
+      method: "POST",
+      body: JSON.stringify({ name, tagIds }),
+    }),
+  updateCalendar: (id: string, data: { name?: string; tagIds?: string[] }) =>
+    request<{ calendar: SavedCalendar }>(`/api/calendars/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteCalendar: (id: string) =>
+    request<{ ok: true }>(`/api/calendars/${id}`, { method: "DELETE" }),
+  shareCalendar: (id: string, enabled: boolean) =>
+    request<{ calendar: SavedCalendar; url: string | null }>(
+      `/api/calendars/${id}/share`,
+      { method: "POST", body: JSON.stringify({ enabled }) }
+    ),
+  shareSnapshot: (token: string) =>
+    request<{ snapshot: CalendarSnapshot }>(`/api/shares/${token}`),
   adminCreateGlobalTag: (name: string, color: string) =>
     request<{ tag: Tag }>("/api/admin/tags", {
       method: "POST",

@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { DAY_LABELS } from "@/lib/time";
+import type { CalendarSnapshot } from "@/lib/types";
 import { FestivalProvider, useFestival, type InitialData } from "./Provider";
 import { Calendar } from "./Calendar";
+import { CalendarBar } from "./CalendarBar";
 import { Header } from "./Header";
+import { ImportDialog } from "./ImportDialog";
 import { TagBar } from "./TagBar";
 
 const FILTER_KEY = "ref-filter";
@@ -25,13 +28,20 @@ function defaultDay(): number {
   return 1;
 }
 
-export function ScheduleApp({ initial }: { initial: InitialData }) {
+export function ScheduleApp({
+  initial,
+  importSnapshot,
+}: {
+  initial: InitialData;
+  importSnapshot?: CalendarSnapshot;
+}) {
   return (
     <FestivalProvider initial={initial}>
       <Header />
       <Hero />
       <Planner />
       <Footer />
+      {importSnapshot && <ImportDialog snapshot={importSnapshot} />}
     </FestivalProvider>
   );
 }
@@ -97,6 +107,7 @@ function Planner() {
   return (
     <main id="schedule" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20">
       <TagBar filter={effectiveFilter} onFilterChange={changeFilter} />
+      <CalendarBar filter={effectiveFilter} onApply={changeFilter} />
 
       <nav className="mt-6 flex flex-wrap gap-2">
         {Object.entries(DAY_LABELS).map(([d, meta]) => {

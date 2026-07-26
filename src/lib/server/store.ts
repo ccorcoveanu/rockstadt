@@ -4,7 +4,9 @@ import { adminClient, TABLES } from "./appwrite";
 import { env } from "./env";
 import {
   GLOBAL_OWNER,
+  type CalendarSnapshot,
   type Concert,
+  type SavedCalendar,
   type Schedule,
   type Stage,
   type Tag,
@@ -220,6 +222,109 @@ export async function upsertAssignments(
     results.push(toAssignment(r));
   }
   return results;
+}
+
+function toCalendar(r: Row): SavedCalendar {
+  return {
+    id: r.$id,
+    ownerId: r.ownerId as string,
+    name: r.name as string,
+    tagIds: (r.tagIds as string[]) ?? [],
+    shareToken: (r.shareToken as string | null) ?? null,
+    shareEnabled: Boolean(r.shareEnabled),
+  };
+}
+
+export async function listCalendars(userId: string): Promise<SavedCalendar[]> {
+  const rows = await listAll(TABLES.calendars, [Query.equal("ownerId", userId)]);
+  return rows.map(toCalendar);
+}
+
+export async function getCalendar(id: string): Promise<SavedCalendar | null> {
+  const { tables } = adminClient();
+  try {
+    const r = (await tables.getRow({
+      databaseId: env.databaseId,
+      tableId: TABLES.calendars,
+      rowId: id,
+    })) as Row;
+    return toCalendar(r);
+  } catch {
+    return null;
+  }
+}
+
+export async function createCalendar(data: {
+  ownerId: string;
+  name: string;
+  tagIds: string[];
+}): Promise<SavedCalendar> {
+  const { tables } = adminClient();
+  const { ID } = await import("node-appwrite");
+  const r = (await tables.createRow<Models.DefaultRow>({
+    databaseId: env.databaseId,
+    tableId: TABLES.calendars,
+    rowId: ID.unique(),
+    data: { ...data, shareToken: null, shareEnabled: false },
+  })) as Row;
+  return toCalendar(r);
+}
+
+export async function updateCalendar(
+  id: string,
+  data: Partial<Pick<SavedCalendar, "name" | "tagIds" | "shareToken" | "shareEnabled">>
+): Promise<SavedCalendar> {
+  const { tables } = adminClient();
+  const r = (await tables.updateRow({
+    databaseId: env.databaseId,
+    tableId: TABLES.calendars,
+    rowId: id,
+    data,
+  })) as Row;
+  return toCalendar(r);
+}
+
+export async function deleteCalendar(id: string): Promise<void> {
+  const { tables } = adminClient();
+  await tables.deleteRow({
+    databaseId: env.databaseId,
+    tableId: TABLES.calendars,
+    rowId: id,
+  });
+}
+
+export async function findCalendarByToken(token: string): Promise<SavedCalendar | null> {
+  const rows = await listAll(TABLES.calendars, [Query.equal("shareToken", token)]);
+  const cal = rows.map(toCalendar).find((c) => c.shareEnabled);
+  return cal ?? null;
+}
+
+// Live snapshot: reflects the owner's tags/assignments at access time.
+export async function buildSnapshot(
+  cal: SavedCalendar,
+  ownerName: string
+): Promise<CalendarSnapshot> {
+  const [tags, assignmentRows] = await Promise.all([
+    listTagsFor(cal.ownerId),
+    listAll(TABLES.assignments, [Query.equal("userId", cal.ownerId)]),
+  ]);
+  const included = tags.filter((t) => cal.tagIds.includes(t.id));
+  const byId = new Map(included.map((t) => [t.id, t]));
+  const assignments = assignmentRows
+    .map(toAssignment)
+    .filter((a) => a.active && byId.has(a.tagId))
+    .map((a) => ({ concertId: a.concertId, tagSlug: byId.get(a.tagId)!.slug }));
+  return {
+    calendarName: cal.name,
+    ownerName,
+    tags: included.map((t) => ({
+      slug: t.slug,
+      name: t.name,
+      color: t.color,
+      global: t.ownerId === GLOBAL_OWNER,
+    })),
+    assignments,
+  };
 }
 
 export async function createConcert(data: Omit<Concert, "id">): Promise<Concert> {

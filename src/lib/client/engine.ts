@@ -1,4 +1,12 @@
-import type { Schedule, SessionUser, Tag, TagAssignment } from "../types";
+import type {
+  CalendarSnapshot,
+  SavedCalendar,
+  Schedule,
+  SessionUser,
+  Tag,
+  TagAssignment,
+} from "../types";
+import { GLOBAL_OWNER, slugifyTag } from "../types";
 import { api, ApiError } from "./api";
 import { asgKey, db, kvGet, kvSet, type LocalAssignment } from "./db";
 
@@ -11,6 +19,7 @@ export type EngineState = {
   user: SessionUser | null;
   tags: Tag[];
   assignments: Map<string, LocalAssignment>;
+  calendars: SavedCalendar[];
   online: boolean;
   syncing: boolean;
   pendingCount: number;
@@ -19,6 +28,7 @@ export type EngineState = {
 type Listener = () => void;
 
 const LOCAL_TAG_PREFIX = "local-";
+const LOCAL_CAL_PREFIX = "localcal-";
 
 function now(): string {
   return new Date().toISOString();
@@ -30,12 +40,15 @@ export class SyncEngine {
     user: null,
     tags: [],
     assignments: new Map(),
+    calendars: [],
     online: true,
     syncing: false,
     pendingCount: 0,
   };
   private listeners = new Set<Listener>();
   private pushInFlight = false;
+  private lastSyncAt = 0;
+  private calIdMap = new Map<string, string>();
 
   getState = (): EngineState => {
     return this.state;
@@ -60,13 +73,25 @@ export class SyncEngine {
     user: SessionUser | null;
     tags: Tag[];
     assignments: TagAssignment[];
+    calendars: SavedCalendar[];
   }): Promise<void> {
     this.set({ online: navigator.onLine });
+    const revalidate = () => {
+      if (!navigator.onLine || Date.now() - this.lastSyncAt < 15_000) return;
+      void this.pushPending().then(() => this.refresh());
+    };
     window.addEventListener("online", () => {
       this.set({ online: true });
       void this.pushPending().then(() => this.refresh());
     });
     window.addEventListener("offline", () => this.set({ online: false }));
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") revalidate();
+    });
+    setInterval(() => {
+      if (document.visibilityState === "visible") revalidate();
+    }, 5 * 60_000);
 
     const cachedUser = await kvGet<SessionUser | null>("user");
     const serverReachable = initial.tags.length > 0 || initial.schedule.concerts.length > 0;
@@ -80,6 +105,7 @@ export class SyncEngine {
       }
       await this.reconcileTags(initial.tags, initial.user);
       await this.reconcileAssignments(initial.assignments);
+      await this.reconcileCalendars(initial.calendars);
     }
 
     const schedule =
@@ -89,8 +115,16 @@ export class SyncEngine {
     const assignments = new Map(
       (await db.assignments.toArray()).map((a) => [a.key, a])
     );
+    const calendars = await db.calendars.toArray();
     const pendingCount = await db.assignments.where("dirty").equals(1).count();
-    this.set({ schedule, user, tags: sortTags(tags, user), assignments, pendingCount });
+    this.set({
+      schedule,
+      user,
+      tags: sortTags(tags, user),
+      assignments,
+      calendars: sortCalendars(calendars),
+      pendingCount,
+    });
 
     if (navigator.onLine && user) void this.pushPending();
   }
@@ -98,13 +132,18 @@ export class SyncEngine {
   async refresh(): Promise<void> {
     if (!navigator.onLine) return;
     this.set({ syncing: true });
+    this.lastSyncAt = Date.now();
     try {
       const [schedule, { tags }] = await Promise.all([api.schedule(), api.tags()]);
       await kvSet("schedule", schedule);
       await this.reconcileTags(tags, this.state.user);
       if (this.state.user) {
-        const { assignments } = await api.assignments();
+        const [{ assignments }, { calendars }] = await Promise.all([
+          api.assignments(),
+          api.calendars(),
+        ]);
         await this.reconcileAssignments(assignments);
+        await this.reconcileCalendars(calendars);
       }
       await this.reload();
     } catch {
@@ -119,14 +158,24 @@ export class SyncEngine {
     const assignments = new Map(
       (await db.assignments.toArray()).map((a) => [a.key, a])
     );
+    const calendars = await db.calendars.toArray();
     const schedule = (await kvGet<Schedule>("schedule")) ?? this.state.schedule;
     const pendingCount = await db.assignments.where("dirty").equals(1).count();
     this.set({
       schedule,
       tags: sortTags(tags, this.state.user),
       assignments,
+      calendars: sortCalendars(calendars),
       pendingCount,
     });
+  }
+
+  private async reconcileCalendars(server: SavedCalendar[]): Promise<void> {
+    const localOnly = (await db.calendars.toArray()).filter((c) =>
+      c.id.startsWith(LOCAL_CAL_PREFIX)
+    );
+    await db.calendars.clear();
+    await db.calendars.bulkPut([...server, ...localOnly]);
   }
 
   // Server tag list wins for non-dirty data, but locally created (not yet
@@ -152,13 +201,17 @@ export class SyncEngine {
   }
 
   async toggleTag(concertId: string, tagId: string): Promise<void> {
+    const current = this.state.assignments.get(asgKey(concertId, tagId));
+    await this.setAssignment(concertId, tagId, !(current?.active ?? false));
+  }
+
+  async setAssignment(concertId: string, tagId: string, active: boolean): Promise<void> {
     const key = asgKey(concertId, tagId);
-    const current = this.state.assignments.get(key);
     const next: LocalAssignment = {
       key,
       concertId,
       tagId,
-      active: !(current?.active ?? false),
+      active,
       clientUpdatedAt: now(),
       dirty: 1,
     };
@@ -169,13 +222,13 @@ export class SyncEngine {
     if (this.state.user && this.state.online) void this.pushPending();
   }
 
-  async createTag(name: string, color: string): Promise<void> {
+  async createTag(name: string, color: string): Promise<Tag> {
     if (this.state.user && this.state.online) {
       try {
         const { tag } = await api.createTag(name, color);
         await db.tags.put(tag);
         await this.reload();
-        return;
+        return tag;
       } catch (e) {
         if (e instanceof ApiError && e.status !== 429 && e.status < 500) throw e;
         // Network/server hiccup: fall through to the offline path.
@@ -185,7 +238,7 @@ export class SyncEngine {
     const tag: Tag = {
       id: localId,
       name,
-      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+      slug: slugifyTag(name),
       color,
       ownerId: this.state.user?.id ?? "anonymous",
     };
@@ -194,6 +247,7 @@ export class SyncEngine {
       await db.tagOps.add({ op: "create", localId, name, color } as never);
     }
     await this.reload();
+    return tag;
   }
 
   async updateTag(id: string, data: { name?: string; color?: string }): Promise<void> {
@@ -224,6 +278,13 @@ export class SyncEngine {
     await db.tags.delete(id);
     const stale = await db.assignments.where("tagId").equals(id).toArray();
     await db.assignments.bulkDelete(stale.map((s) => s.key));
+    for (const cal of await db.calendars.toArray()) {
+      if (cal.tagIds.includes(id)) {
+        const tagIds = cal.tagIds.filter((t) => t !== id);
+        if (tagIds.length === 0) await this.removeCalendar(cal.id);
+        else await this.updateCalendarMeta(cal.id, { tagIds });
+      }
+    }
     if (id.startsWith(LOCAL_TAG_PREFIX)) {
       // Cancel a pending create instead of queueing a delete.
       const ops = await db.tagOps.toArray();
@@ -243,12 +304,138 @@ export class SyncEngine {
     await this.reload();
   }
 
+  async saveCalendar(name: string, tagIds: string[]): Promise<SavedCalendar> {
+    if (this.state.user && this.state.online && tagIds.every((t) => !t.startsWith(LOCAL_TAG_PREFIX))) {
+      try {
+        const { calendar } = await api.createCalendar(name, tagIds);
+        await db.calendars.put(calendar);
+        await this.reload();
+        return calendar;
+      } catch (e) {
+        if (e instanceof ApiError && e.status !== 429 && e.status < 500) throw e;
+      }
+    }
+    const localId = `${LOCAL_CAL_PREFIX}${crypto.randomUUID()}`;
+    const calendar: SavedCalendar = {
+      id: localId,
+      ownerId: this.state.user?.id ?? "anonymous",
+      name,
+      tagIds,
+      shareToken: null,
+      shareEnabled: false,
+    };
+    await db.calendars.put(calendar);
+    if (this.state.user) {
+      await db.calOps.add({ op: "create", localId, name, tagIds } as never);
+    }
+    await this.reload();
+    return calendar;
+  }
+
+  async updateCalendarMeta(
+    id: string,
+    data: { name?: string; tagIds?: string[] }
+  ): Promise<void> {
+    const cal = await db.calendars.get(id);
+    if (!cal) return;
+    await db.calendars.put({ ...cal, ...data });
+    if (id.startsWith(LOCAL_CAL_PREFIX)) {
+      const ops = await db.calOps.toArray();
+      const pending = ops.find((o) => o.op === "create" && o.localId === id);
+      if (pending) {
+        await db.calOps.put({
+          ...pending,
+          name: data.name ?? pending.name,
+          tagIds: data.tagIds ?? pending.tagIds,
+        });
+      }
+    } else if (this.state.user) {
+      if (this.state.online) {
+        try {
+          await api.updateCalendar(id, data);
+        } catch {
+          await db.calOps.add({ op: "update", calendarId: id, ...data } as never);
+        }
+      } else {
+        await db.calOps.add({ op: "update", calendarId: id, ...data } as never);
+      }
+    }
+    await this.reload();
+  }
+
+  async removeCalendar(id: string): Promise<void> {
+    await db.calendars.delete(id);
+    if (id.startsWith(LOCAL_CAL_PREFIX)) {
+      const ops = await db.calOps.toArray();
+      const pending = ops.find((o) => o.op === "create" && o.localId === id);
+      if (pending) await db.calOps.delete(pending.id);
+    } else if (this.state.user) {
+      if (this.state.online) {
+        try {
+          await api.deleteCalendar(id);
+        } catch {
+          await db.calOps.add({ op: "delete", calendarId: id } as never);
+        }
+      } else {
+        await db.calOps.add({ op: "delete", calendarId: id } as never);
+      }
+    }
+    await this.reload();
+  }
+
+  // Sharing needs the server to answer the link, so it is online + account only.
+  async setCalendarSharing(id: string, enabled: boolean): Promise<string | null> {
+    if (!this.state.user) throw new ApiError(401, "Sign in to share calendars");
+    if (!this.state.online) throw new ApiError(0, "Sharing needs a connection");
+    if (id.startsWith(LOCAL_CAL_PREFIX)) {
+      await this.pushPending();
+      const serverId = this.calIdMap.get(id);
+      if (!serverId) throw new ApiError(0, "Calendar not synced yet, retry in a moment");
+      id = serverId;
+    }
+    const { calendar, url } = await api.shareCalendar(id, enabled);
+    await db.calendars.put(calendar);
+    await this.reload();
+    return url;
+  }
+
+  // Rebuild a shared calendar in this account/device: global tags map by slug,
+  // user tags are cloned (reusing an existing own tag with the same slug).
+  async importSnapshot(
+    snapshot: CalendarSnapshot,
+    personalName: string
+  ): Promise<{ tagIds: string[] }> {
+    const tagIdBySlug = new Map<string, string>();
+    for (const t of snapshot.tags) {
+      const existing = this.state.tags.find(
+        (x) => x.slug === t.slug && (t.global ? x.ownerId === GLOBAL_OWNER : x.ownerId !== GLOBAL_OWNER)
+      );
+      if (existing) {
+        tagIdBySlug.set(t.slug, existing.id);
+        continue;
+      }
+      const created = await this.createTag(t.name, t.color);
+      tagIdBySlug.set(t.slug, created.id);
+    }
+    for (const a of snapshot.assignments) {
+      const tagId = tagIdBySlug.get(a.tagSlug);
+      if (!tagId) continue;
+      const key = asgKey(a.concertId, tagId);
+      if (this.state.assignments.get(key)?.active) continue;
+      await this.setAssignment(a.concertId, tagId, true);
+    }
+    const tagIds = [...new Set(tagIdBySlug.values())];
+    await this.saveCalendar(personalName, tagIds);
+    return { tagIds };
+  }
+
   async pushPending(): Promise<void> {
     if (this.pushInFlight || !this.state.user || !navigator.onLine) return;
     this.pushInFlight = true;
     this.set({ syncing: true });
     try {
       await this.replayTagOps();
+      await this.replayCalOps();
       const dirty = await db.assignments.where("dirty").equals(1).toArray();
       const pushable = dirty.filter((d) => !d.tagId.startsWith(LOCAL_TAG_PREFIX));
       if (pushable.length > 0) {
@@ -295,6 +482,17 @@ export class SyncEngine {
             key: asgKey(s.concertId, tag.id),
           });
         }
+        // Calendars (saved rows and queued creates) may reference the local id.
+        const remap = (ids: string[]) => ids.map((i) => (i === op.localId ? tag.id : i));
+        for (const cal of await db.calendars.toArray()) {
+          if (cal.tagIds.includes(op.localId)) {
+            await db.calendars.put({ ...cal, tagIds: remap(cal.tagIds) });
+          }
+        }
+        for (const cop of await db.calOps.toArray()) {
+          if (cop.op === "delete" || !cop.tagIds?.includes(op.localId)) continue;
+          await db.calOps.put({ ...cop, tagIds: remap(cop.tagIds) });
+        }
       } else if (op.op === "update") {
         await api.updateTag(op.tagId, { name: op.name, color: op.color });
       } else {
@@ -305,6 +503,31 @@ export class SyncEngine {
         }
       }
       await db.tagOps.delete(op.id);
+    }
+  }
+
+  private async replayCalOps(): Promise<void> {
+    const ops = await db.calOps.orderBy("id").toArray();
+    for (const op of ops) {
+      if (op.op === "create") {
+        if (op.tagIds!.some((t) => t.startsWith(LOCAL_TAG_PREFIX))) {
+          // Referenced tag still unsynced (its create must have failed); retry later.
+          continue;
+        }
+        const { calendar } = await api.createCalendar(op.name!, op.tagIds!);
+        await db.calendars.delete(op.localId!);
+        await db.calendars.put(calendar);
+        this.calIdMap.set(op.localId!, calendar.id);
+      } else if (op.op === "update") {
+        await api.updateCalendar(op.calendarId!, { name: op.name, tagIds: op.tagIds });
+      } else {
+        try {
+          await api.deleteCalendar(op.calendarId!);
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }
+      }
+      await db.calOps.delete(op.id);
     }
   }
 
@@ -323,6 +546,23 @@ export class SyncEngine {
     }
     const all = await db.assignments.toArray();
     await db.assignments.bulkPut(all.map((a) => ({ ...a, dirty: 1 as const })));
+
+    for (const cal of await db.calendars.toArray()) {
+      if (cal.ownerId !== "anonymous") continue;
+      await db.calendars.put({ ...cal, ownerId: user.id });
+      if (cal.id.startsWith(LOCAL_CAL_PREFIX)) {
+        const ops = await db.calOps.toArray();
+        const queued = ops.some((o) => o.op === "create" && o.localId === cal.id);
+        if (!queued) {
+          await db.calOps.add({
+            op: "create",
+            localId: cal.id,
+            name: cal.name,
+            tagIds: cal.tagIds,
+          } as never);
+        }
+      }
+    }
   }
 
   async login(email: string, password: string): Promise<void> {
@@ -350,11 +590,17 @@ export class SyncEngine {
     // Personal data leaves the device with the account.
     await db.assignments.clear();
     await db.tagOps.clear();
+    await db.calendars.clear();
+    await db.calOps.clear();
     await db.tags.filter((t) => t.ownerId !== "_global").delete();
     await kvSet("user", null);
     await this.reload();
     this.set({ user: null });
   }
+}
+
+function sortCalendars(cals: SavedCalendar[]): SavedCalendar[] {
+  return [...cals].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function sortTags(tags: Tag[], user: SessionUser | null): Tag[] {

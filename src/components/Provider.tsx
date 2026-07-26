@@ -10,13 +10,20 @@ import {
 } from "react";
 import { engine, type EngineState } from "@/lib/client/engine";
 import { asgKey } from "@/lib/client/db";
-import type { Schedule, SessionUser, Tag, TagAssignment } from "@/lib/types";
+import type {
+  SavedCalendar,
+  Schedule,
+  SessionUser,
+  Tag,
+  TagAssignment,
+} from "@/lib/types";
 
 export type InitialData = {
   schedule: Schedule;
   user: SessionUser | null;
   tags: Tag[];
   assignments: TagAssignment[];
+  calendars: SavedCalendar[];
 };
 
 const Ctx = createContext<{ state: EngineState; engine: typeof engine } | null>(null);
@@ -32,6 +39,7 @@ function snapshotFromInitial(initial: InitialData): EngineState {
         { key: asgKey(a.concertId, a.tagId), ...a, dirty: 0 },
       ])
     ),
+    calendars: initial.calendars,
     online: true,
     syncing: false,
     pendingCount: 0,

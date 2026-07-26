@@ -32,6 +32,7 @@ export const TABLES = {
   concerts: "concerts",
   tags: "tags",
   assignments: "tag_assignments",
+  calendars: "calendars",
 } as const;
 
 export const ADMIN_TEAM_ID = "admins";

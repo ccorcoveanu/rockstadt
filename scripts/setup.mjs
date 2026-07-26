@@ -36,7 +36,8 @@ async function ensure(fn, existsMsg) {
     await fn();
     return true;
   } catch (e) {
-    if (e?.code === 409) {
+    const dupIndex = e?.code === 400 && /already an index/i.test(e?.message ?? "");
+    if (e?.code === 409 || dupIndex) {
       skip(existsMsg);
       return false;
     }
@@ -153,8 +154,33 @@ await ensure(
   "tag_assignments.clientUpdatedAt"
 );
 
+await ensure(
+  () => tables.createTable({ databaseId, tableId: "calendars", name: "Saved calendars" }),
+  "calendars"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "calendars", key: "ownerId", size: 64, required: true }),
+  "calendars.ownerId"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "calendars", key: "name", size: 128, required: true }),
+  "calendars.name"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "calendars", key: "tagIds", size: 64, required: false, array: true }),
+  "calendars.tagIds"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "calendars", key: "shareToken", size: 64, required: false }),
+  "calendars.shareToken"
+);
+await ensure(
+  () => tables.createBooleanColumn({ databaseId, tableId: "calendars", key: "shareEnabled", required: false, xdefault: false }),
+  "calendars.shareEnabled"
+);
+
 console.log("Waiting for columns…");
-for (const t of ["stages", "concerts", "tags", "tag_assignments"]) await waitForColumns(t);
+for (const t of ["stages", "concerts", "tags", "tag_assignments", "calendars"]) await waitForColumns(t);
 ok("all columns available");
 
 console.log("Indexes");
@@ -173,6 +199,14 @@ await ensure(
 await ensure(
   () => tables.createIndex({ databaseId, tableId: "tag_assignments", key: "byUser", type: "key", columns: ["userId"] }),
   "tag_assignments.byUser"
+);
+await ensure(
+  () => tables.createIndex({ databaseId, tableId: "calendars", key: "byOwner", type: "key", columns: ["ownerId"] }),
+  "calendars.byOwner"
+);
+await ensure(
+  () => tables.createIndex({ databaseId, tableId: "calendars", key: "byToken", type: "key", columns: ["shareToken"] }),
+  "calendars.byToken"
 );
 
 console.log("Admins team");

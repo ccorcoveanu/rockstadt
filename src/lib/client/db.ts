@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Schedule, SessionUser, Tag } from "../types";
+import type { SavedCalendar, Schedule, SessionUser, Tag } from "../types";
 
 export type LocalAssignment = {
   key: string; // `${concertId}|${tagId}`
@@ -15,6 +15,17 @@ export type TagOp =
   | { id?: number; op: "update"; tagId: string; name?: string; color?: string }
   | { id?: number; op: "delete"; tagId: string };
 
+// Flat shape (not a discriminated union): Dexie's InsertType drops
+// union-specific properties, which breaks put() typing.
+export type CalendarOp = {
+  id?: number;
+  op: "create" | "update" | "delete";
+  localId?: string;
+  calendarId?: string;
+  name?: string;
+  tagIds?: string[];
+};
+
 export type KvRow = { key: string; value: unknown };
 
 export const db = new Dexie("rockstadt-ref") as Dexie & {
@@ -22,6 +33,8 @@ export const db = new Dexie("rockstadt-ref") as Dexie & {
   tags: EntityTable<Tag, "id">;
   assignments: EntityTable<LocalAssignment, "key">;
   tagOps: EntityTable<TagOp & { id: number }, "id">;
+  calendars: EntityTable<SavedCalendar, "id">;
+  calOps: EntityTable<CalendarOp & { id: number }, "id">;
 };
 
 db.version(1).stores({
@@ -29,6 +42,11 @@ db.version(1).stores({
   tags: "id, ownerId",
   assignments: "key, concertId, tagId, dirty",
   tagOps: "++id",
+});
+
+db.version(2).stores({
+  calendars: "id, ownerId",
+  calOps: "++id",
 });
 
 export const asgKey = (concertId: string, tagId: string) => `${concertId}|${tagId}`;

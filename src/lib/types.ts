@@ -33,6 +33,25 @@ export type TagAssignment = {
   clientUpdatedAt: string;
 };
 
+export type SavedCalendar = {
+  id: string;
+  ownerId: string;
+  name: string;
+  tagIds: string[];
+  shareToken: string | null;
+  shareEnabled: boolean;
+};
+
+// What a share link resolves to: enough to rebuild the calendar in another
+// account. Global tags are referenced by slug (mapped to the same global tag
+// on import); user tags are cloned.
+export type CalendarSnapshot = {
+  calendarName: string;
+  ownerName: string;
+  tags: { slug: string; name: string; color: string; global: boolean }[];
+  assignments: { concertId: string; tagSlug: string }[];
+};
+
 export type SessionUser = {
   id: string;
   name: string;

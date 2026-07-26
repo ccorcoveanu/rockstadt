@@ -29,6 +29,9 @@ export function Calendar({
 }) {
   const { state } = useFestival();
   const [openConcert, setOpenConcert] = useState<Concert | null>(null);
+  // Filter shows only your calendar by default; "expand" brings the rest back, dimmed.
+  const [expanded, setExpanded] = useState(false);
+  const hideIneligible = filter.size > 0 && !expanded;
 
   const schedule = state.schedule;
   const stages: Stage[] = useMemo(() => {
@@ -76,7 +79,7 @@ export function Calendar({
   return (
     <div className="rise-in">
       {filter.size > 0 && (
-        <p className="mb-3 font-cond text-sm uppercase tracking-wider">
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-cond text-sm uppercase tracking-wider">
           {clashCount > 0 ? (
             <span className="text-clash">
               ⚠ {clashCount} tagged set{clashCount > 1 ? "s" : ""} in conflict on{" "}
@@ -87,7 +90,13 @@ export function Calendar({
               No clashes among your tagged sets on {DAY_LABELS[day].title}
             </span>
           )}
-        </p>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-muted underline decoration-dotted underline-offset-4 hover:text-ink"
+          >
+            {expanded ? "− collapse to my calendar" : "+ expand full schedule"}
+          </button>
+        </div>
       )}
 
       {/* Desktop: poster-style stage grid */}
@@ -95,6 +104,7 @@ export function Calendar({
         <StageGrid
           stages={stages}
           blocks={blocks}
+          hideIneligible={hideIneligible}
           onOpen={setOpenConcert}
         />
       </div>
@@ -104,6 +114,7 @@ export function Calendar({
         <AgendaList
           blocks={blocks}
           stageOf={stageOf}
+          hideIneligible={hideIneligible}
           onOpen={setOpenConcert}
         />
       </div>
@@ -124,10 +135,12 @@ export function Calendar({
 function StageGrid({
   stages,
   blocks,
+  hideIneligible,
   onOpen,
 }: {
   stages: Stage[];
   blocks: Map<string, BlockMeta>;
+  hideIneligible: boolean;
   onOpen: (c: Concert) => void;
 }) {
   const marks = hourMarks();
@@ -177,6 +190,7 @@ function StageGrid({
       ))}
 
       {[...blocks.values()].map(({ concert, eligible, clashing }) => {
+        if (!eligible && hideIneligible) return null;
         const col = stages.findIndex((s) => s.id === concert.stageId);
         if (col < 0) return null;
         const start = slotOf(concert.startsAt);
@@ -218,15 +232,17 @@ function StageGrid({
 function AgendaList({
   blocks,
   stageOf,
+  hideIneligible,
   onOpen,
 }: {
   blocks: Map<string, BlockMeta>;
   stageOf: (id: string) => Stage | undefined;
+  hideIneligible: boolean;
   onOpen: (c: Concert) => void;
 }) {
-  const rows = [...blocks.values()].sort((a, b) =>
-    a.concert.startsAt.localeCompare(b.concert.startsAt)
-  );
+  const rows = [...blocks.values()]
+    .filter((b) => b.eligible || !hideIneligible)
+    .sort((a, b) => a.concert.startsAt.localeCompare(b.concert.startsAt));
   return (
     <ul className="space-y-2">
       {rows.map(({ concert, eligible, clashing }) => {

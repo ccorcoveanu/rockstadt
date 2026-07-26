@@ -78,8 +78,8 @@ export function TagBar({
       </div>
       {filter.size > 0 && (
         <p className="font-cond text-xs uppercase tracking-wider text-muted">
-          Showing concerts carrying any selected tag — overlaps glow{" "}
-          <span className="text-clash">red</span>. Others stay dimmed.
+          Showing only concerts carrying a selected tag — overlaps glow{" "}
+          <span className="text-clash">red</span>. Use expand to see the rest.
         </p>
       )}
       {managing && <TagManager onClose={() => setManaging(false)} />}

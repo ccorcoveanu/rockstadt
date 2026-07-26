@@ -24,6 +24,10 @@ type BlockMeta = {
   clashing: Concert[];
 };
 
+// TEMPORARY (remove after the festival starts): pretend we are 24h later so
+// the live view can be tested the day before Day 1.
+const DEV_TIME_SHIFT_MS = 24 * 3600_000;
+
 // Client-only clock, ticking every 30s; null during SSR/hydration so the
 // server and first client render agree. `?now=<ISO>` overrides for previews.
 function useNow(): Date | null {
@@ -32,7 +36,8 @@ function useNow(): Date | null {
     const override = new URLSearchParams(window.location.search).get("now");
     const overrideDate = override ? new Date(override) : null;
     const valid = overrideDate && !Number.isNaN(overrideDate.getTime());
-    const tick = () => setNow(valid ? overrideDate : new Date());
+    const tick = () =>
+      setNow(valid ? overrideDate : new Date(Date.now() + DEV_TIME_SHIFT_MS));
     tick();
     const t = setInterval(tick, 30_000);
     return () => clearInterval(t);

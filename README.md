@@ -68,4 +68,4 @@ Share links live under the app's manifest scope, and the manifest sets `launch_h
 ## Notes
 
 - `npm audit` reports high-severity findings in transitive dev/build dependencies of the latest Next.js/ESLint; the proposed "fixes" downgrade Next to v9. Nothing ships those paths at runtime — revisit when upstream bumps them.
-- The service worker is hand-rolled (`public/sw.js`): Serwist's Next plugin is webpack-only while this app builds with Turbopack, and for a single-page app runtime caching covers the same assets its precache manifest would.
+- The service worker is hand-rolled (`scripts/sw.template.js` → generated `public/sw.js`): Serwist's Next plugin is webpack-only while this app builds with Turbopack, and for a single-page app runtime caching covers the same assets its precache manifest would. Each `npm run build` stamps a unique version into the worker; when a client sees the new worker take over it purges old caches and reloads itself once, so deploys can never leave users on stale bundles.

@@ -3,7 +3,7 @@
  * Static assets & posters: cache-first (immutable, hashed or versioned).
  * API GETs: network-first fallback; live data truth lives in IndexedDB anyway.
  */
-const VERSION = "ref-v1";
+const VERSION = "__SW_VERSION__";
 const SHELL_CACHE = `${VERSION}-shell`;
 const ASSET_CACHE = `${VERSION}-assets`;
 const API_CACHE = `${VERSION}-api`;

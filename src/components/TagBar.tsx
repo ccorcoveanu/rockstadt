@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { GLOBAL_OWNER, type Tag } from "@/lib/types";
 import { useFestival } from "./Provider";
+import { Sheet, SheetTitle } from "./Sheet";
 
 const PALETTE = [
   "#e3b341",
@@ -108,16 +109,8 @@ function TagManager({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <dialog
-      open
-      className="fixed inset-0 z-50 m-auto w-[min(92vw,30rem)] border border-white/10 bg-bg-raised p-6 text-ink"
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="font-display text-xl">Your tags</h3>
-        <button onClick={onClose} className="font-cond uppercase text-muted hover:text-ink">
-          close ✕
-        </button>
-      </div>
+    <Sheet onClose={onClose} labelledBy="tag-manager-title">
+      <SheetTitle id="tag-manager-title">Your tags</SheetTitle>
 
       <div className="mt-4 space-y-1">
         <p className="font-cond text-xs uppercase tracking-widest text-muted">
@@ -178,7 +171,7 @@ function TagManager({ onClose }: { onClose: () => void }) {
         </div>
         {error && <p className="mt-2 text-sm text-clash">{error}</p>}
       </div>
-    </dialog>
+    </Sheet>
   );
 }
 

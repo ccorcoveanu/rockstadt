@@ -3,17 +3,26 @@
 import { useState } from "react";
 import type { CalendarSnapshot } from "@/lib/types";
 import { useFestival } from "./Provider";
+import { Sheet, SheetTitle, useSheetClose } from "./Sheet";
 
 const FILTER_KEY = "ref-filter";
 
 export function ImportDialog({ snapshot }: { snapshot: CalendarSnapshot }) {
-  const { engine } = useFestival();
   const [open, setOpen] = useState(true);
+  if (!open) return null;
+  return (
+    <Sheet onClose={() => setOpen(false)} labelledBy="import-title">
+      <ImportBody snapshot={snapshot} />
+    </Sheet>
+  );
+}
+
+function ImportBody({ snapshot }: { snapshot: CalendarSnapshot }) {
+  const { engine } = useFestival();
+  const close = useSheetClose();
   const [name, setName] = useState(snapshot.calendarName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!open) return null;
 
   async function doImport() {
     if (!name.trim()) return;
@@ -34,11 +43,10 @@ export function ImportDialog({ snapshot }: { snapshot: CalendarSnapshot }) {
   const bands = new Set(snapshot.assignments.map((a) => a.concertId)).size;
 
   return (
-    <dialog
-      open
-      className="fixed inset-0 z-50 m-auto w-[min(92vw,26rem)] border border-white/10 bg-bg-raised p-6 text-ink"
-    >
-      <h2 className="font-display text-2xl">Import this calendar?</h2>
+    <>
+      <SheetTitle id="import-title" actionLabel="Just browse">
+        Import this calendar?
+      </SheetTitle>
       <p className="mt-2 font-cond text-sm text-muted">
         <span className="text-ink">{snapshot.ownerName}</span> shared{" "}
         <span className="text-ink">“{snapshot.calendarName}”</span> —{" "}
@@ -65,27 +73,24 @@ export function ImportDialog({ snapshot }: { snapshot: CalendarSnapshot }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={128}
-          className="mt-1 w-full border border-white/10 bg-black/30 px-3 py-2 text-base text-ink outline-none focus:border-[var(--stage-magenta)]"
+          className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-3 text-base text-ink outline-none focus:border-[var(--stage-magenta)]"
         />
       </label>
 
       {error && <p className="mt-3 text-sm text-clash">{error}</p>}
 
       <div className="mt-5 flex justify-end gap-3">
-        <button
-          onClick={() => setOpen(false)}
-          className="font-cond uppercase text-muted hover:text-ink"
-        >
+        <button onClick={close} className="font-cond uppercase text-muted hover:text-ink">
           Just browse
         </button>
         <button
           disabled={busy || !name.trim()}
           onClick={() => void doImport()}
-          className="rough-bg-sm [--block-bg:var(--stage-green)] px-4 py-2 font-cond font-bold uppercase text-black disabled:opacity-50"
+          className="rough-bg-sm [--block-bg:var(--stage-green)] px-4 py-2.5 font-cond font-bold uppercase text-black disabled:opacity-50"
         >
           {busy ? "Importing…" : "Import"}
         </button>
       </div>
-    </dialog>
+    </>
   );
 }

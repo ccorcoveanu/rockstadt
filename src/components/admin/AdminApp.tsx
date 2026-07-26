@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { api } from "@/lib/client/api";
 import { DAY_LABELS, fmtTime } from "@/lib/time";
 import type { Concert, Schedule, Tag } from "@/lib/types";
+import { Sheet, SheetTitle } from "@/components/Sheet";
 
 // Admin edits festival-local times (EEST, UTC+3); sets past midnight belong to
 // the *next* calendar date relative to the festival day.
@@ -313,11 +314,10 @@ function ConcertEditor({
     "w-full border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-[var(--stage-magenta)]";
 
   return (
-    <dialog
-      open
-      className="fixed inset-0 z-50 m-auto w-[min(92vw,26rem)] border border-white/10 bg-bg-raised p-6 text-ink"
-    >
-      <h3 className="font-display text-xl">{concert ? "Edit set" : "Add set"}</h3>
+    <Sheet onClose={() => onDone(false)} labelledBy="concert-editor-title">
+      <SheetTitle id="concert-editor-title">
+        {concert ? "Edit set" : "Add set"}
+      </SheetTitle>
       <div className="mt-4 space-y-3">
         <input
           value={form.band}
@@ -391,6 +391,6 @@ function ConcertEditor({
           {busy ? "…" : "Save"}
         </button>
       </div>
-    </dialog>
+    </Sheet>
   );
 }

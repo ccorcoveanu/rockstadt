@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { SavedCalendar } from "@/lib/types";
 import { useFestival } from "./Provider";
+import { Sheet, SheetTitle } from "./Sheet";
 
 export function CalendarBar({
   filter,
@@ -154,16 +155,8 @@ function ShareDialog({
   }
 
   return (
-    <dialog
-      open
-      className="fixed inset-0 z-50 m-auto w-[min(92vw,28rem)] border border-white/10 bg-bg-raised p-6 text-ink"
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="font-display text-xl">Share “{live.name}”</h3>
-        <button onClick={onClose} className="font-cond uppercase text-muted hover:text-ink">
-          close ✕
-        </button>
-      </div>
+    <Sheet onClose={onClose} labelledBy="share-title">
+      <SheetTitle id="share-title">Share “{live.name}”</SheetTitle>
 
       <p className="mt-2 font-cond text-sm text-muted">
         Anyone with the link can import this calendar — your selected tags and
@@ -214,6 +207,6 @@ function ShareDialog({
         </div>
       )}
       {error && <p className="mt-3 text-sm text-clash">{error}</p>}
-    </dialog>
+    </Sheet>
   );
 }

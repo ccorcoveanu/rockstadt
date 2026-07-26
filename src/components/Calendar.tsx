@@ -320,12 +320,28 @@ function AgendaList({
   const rows = [...blocks.values()]
     .filter((b) => b.eligible || !hideIneligible)
     .sort((a, b) => a.concert.startsAt.localeCompare(b.concert.startsAt));
-  // The NOW divider sits before the first set that hasn't started yet.
+  // The NOW divider sits right above what is still relevant: the first set
+  // that hasn't ended yet (playing sets included, finished ones skipped).
   const nowIndex =
     now !== null && nowMinutes !== null
-      ? rows.findIndex((r) => new Date(r.concert.startsAt) > now)
+      ? rows.findIndex((r) => new Date(r.concert.endsAt) > now)
       : -1;
   const nowAt = nowIndex === -1 && nowMinutes !== null ? rows.length : nowIndex;
+  const nowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (nowAt < 0) return;
+    // Same centering jump as the grid; no-ops while this view is display:none.
+    const t = setTimeout(() => {
+      nowRef.current?.scrollIntoView({
+        behavior: document.visibilityState === "visible" ? "smooth" : "auto",
+        block: "center",
+      });
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowAt >= 0]);
+
   return (
     <ul className="space-y-2">
       {rows.map(({ concert, eligible, clashing }, i) => {
@@ -333,7 +349,7 @@ function AgendaList({
         const live = now !== null && isPlaying(concert, now);
         return (
           <li key={concert.id}>
-            {i === nowAt && <NowDivider now={now} />}
+            {i === nowAt && <NowDivider now={now} innerRef={nowRef} />}
             <button
               onClick={() => onOpen(concert)}
               className={`concert-block rough-bg-sm flex w-full items-center gap-3 px-3 py-2.5 text-left ${
@@ -369,16 +385,22 @@ function AgendaList({
       })}
       {nowAt === rows.length && rows.length > 0 && (
         <li>
-          <NowDivider now={now} />
+          <NowDivider now={now} innerRef={nowRef} />
         </li>
       )}
     </ul>
   );
 }
 
-function NowDivider({ now }: { now: Date | null }) {
+function NowDivider({
+  now,
+  innerRef,
+}: {
+  now: Date | null;
+  innerRef?: React.Ref<HTMLDivElement>;
+}) {
   return (
-    <div className="mb-2 flex items-center gap-2" aria-label="current time">
+    <div ref={innerRef} className="mb-2 flex items-center gap-2" aria-label="current time">
       <span className="live-dot" />
       <span className="font-display text-xs text-clash">
         NOW{now ? ` · ${fmtTime(now.toISOString())}` : ""}

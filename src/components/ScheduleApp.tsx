@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DAY_LABELS } from "@/lib/time";
+import { DAY_DATES, DAY_LABELS } from "@/lib/time";
 import type { CalendarSnapshot } from "@/lib/types";
 import { FestivalProvider, useFestival, type InitialData } from "./Provider";
 import { Calendar } from "./Calendar";
@@ -11,14 +11,6 @@ import { ImportDialog } from "./ImportDialog";
 import { TagBar } from "./TagBar";
 
 const FILTER_KEY = "ref-filter";
-const DAY_DATES: Record<number, string> = {
-  1: "2026-07-27",
-  2: "2026-07-28",
-  3: "2026-07-29",
-  4: "2026-07-30",
-  5: "2026-07-31",
-  6: "2026-08-01",
-};
 
 function defaultDay(): number {
   const today = new Date().toISOString().slice(0, 10);

@@ -64,6 +64,27 @@ export function findClashes(concerts: Concert[]): Map<string, Concert[]> {
   return clashes;
 }
 
+export const DAY_DATES: Record<number, string> = {
+  1: "2026-07-27",
+  2: "2026-07-28",
+  3: "2026-07-29",
+  4: "2026-07-30",
+  5: "2026-07-31",
+  6: "2026-08-01",
+};
+
+// Minutes into a festival day's visual window (14:00 → 03:30 local) for a
+// given instant, or null when the instant falls outside that day.
+export function nowIntoDay(dayDate: string, now: Date): number | null {
+  const start = new Date(`${dayDate}T14:00:00+03:00`).getTime();
+  const m = (now.getTime() - start) / 60_000;
+  return m >= 0 && m <= DAY_END_MIN - DAY_START_MIN ? m : null;
+}
+
+export function isPlaying(c: Concert, now: Date): boolean {
+  return new Date(c.startsAt) <= now && now < new Date(c.endsAt);
+}
+
 export const DAY_LABELS: Record<number, { title: string; date: string }> = {
   1: { title: "Day 1", date: "27 July" },
   2: { title: "Day 2", date: "28 July" },

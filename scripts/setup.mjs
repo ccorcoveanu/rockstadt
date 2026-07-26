@@ -254,10 +254,10 @@ function stageHex(color) {
 // Festival runs in EEST (UTC+3) throughout; sets starting before 05:00 belong to the next calendar date.
 function toInstant(dayDate, hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
-  const d = new Date(`${dayDate}T00:00:00+03:00`);
-  if (h < 5) d.setUTCDate(d.getUTCDate() + 1);
-  d.setUTCHours(h - 3, m, 0, 0);
-  return d.toISOString();
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  const t = new Date(`${dayDate}T${hh}:${mm}:00+03:00`).getTime();
+  return new Date(h < 5 ? t + 24 * 3600_000 : t).toISOString();
 }
 
 const slugify = (s) =>

@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Concert, Stage } from "@/lib/types";
 import {
+  DAY_DATES,
   DAY_LABELS,
   findClashes,
   fmtRange,
   fmtTime,
   hourMarks,
+  isPlaying,
+  nowIntoDay,
   slotOf,
+  SLOT_MIN,
   SLOTS_PER_DAY,
 } from "@/lib/time";
 import { useFestival } from "./Provider";
@@ -19,6 +23,22 @@ type BlockMeta = {
   eligible: boolean;
   clashing: Concert[];
 };
+
+// Client-only clock, ticking every 30s; null during SSR/hydration so the
+// server and first client render agree. `?now=<ISO>` overrides for previews.
+function useNow(): Date | null {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const override = new URLSearchParams(window.location.search).get("now");
+    const overrideDate = override ? new Date(override) : null;
+    const valid = overrideDate && !Number.isNaN(overrideDate.getTime());
+    const tick = () => setNow(valid ? overrideDate : new Date());
+    tick();
+    const t = setInterval(tick, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
 
 export function Calendar({
   day,
@@ -32,6 +52,8 @@ export function Calendar({
   // Filter shows only your calendar by default; "expand" brings the rest back, dimmed.
   const [expanded, setExpanded] = useState(false);
   const hideIneligible = filter.size > 0 && !expanded;
+  const now = useNow();
+  const nowMinutes = now ? nowIntoDay(DAY_DATES[day], now) : null;
 
   const schedule = state.schedule;
   const stages: Stage[] = useMemo(() => {
@@ -105,6 +127,8 @@ export function Calendar({
           stages={stages}
           blocks={blocks}
           hideIneligible={hideIneligible}
+          nowMinutes={nowMinutes}
+          now={now}
           onOpen={setOpenConcert}
         />
       </div>
@@ -115,6 +139,8 @@ export function Calendar({
           blocks={blocks}
           stageOf={stageOf}
           hideIneligible={hideIneligible}
+          nowMinutes={nowMinutes}
+          now={now}
           onOpen={setOpenConcert}
         />
       </div>
@@ -136,15 +162,37 @@ function StageGrid({
   stages,
   blocks,
   hideIneligible,
+  nowMinutes,
+  now,
   onOpen,
 }: {
   stages: Stage[];
   blocks: Map<string, BlockMeta>;
   hideIneligible: boolean;
+  nowMinutes: number | null;
+  now: Date | null;
   onOpen: (c: Concert) => void;
 }) {
   const marks = hourMarks();
   const cols = stages.length;
+  const nowRef = useRef<HTMLDivElement>(null);
+  const nowSlot = nowMinutes !== null ? Math.round(nowMinutes / SLOT_MIN) : null;
+
+  useEffect(() => {
+    if (nowSlot === null) return;
+    // Delayed so router scroll restoration on load can't override the jump.
+    // Smooth scrolling never completes in hidden tabs (rAF is frozen), so
+    // fall back to an instant jump there.
+    const t = setTimeout(() => {
+      nowRef.current?.scrollIntoView({
+        behavior: document.visibilityState === "visible" ? "smooth" : "auto",
+        block: "center",
+      });
+    }, 400);
+    return () => clearTimeout(t);
+    // Jump when the line appears for the shown day, not on every tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowSlot !== null]);
 
   return (
     <div
@@ -189,6 +237,22 @@ function StageGrid({
         </div>
       ))}
 
+      {nowSlot !== null && (
+        <div
+          ref={nowRef}
+          className="now-line"
+          style={{
+            gridColumn: `1 / span ${cols + 1}`,
+            gridRow: Math.min(nowSlot, SLOTS_PER_DAY - 1) + 2,
+          }}
+        >
+          <span className="now-dot" />
+          <span className="absolute -top-2.5 right-0 font-display text-xs text-clash">
+            NOW
+          </span>
+        </div>
+      )}
+
       {[...blocks.values()].map(({ concert, eligible, clashing }) => {
         if (!eligible && hideIneligible) return null;
         const col = stages.findIndex((s) => s.id === concert.stageId);
@@ -196,13 +260,16 @@ function StageGrid({
         const start = slotOf(concert.startsAt);
         const end = Math.max(slotOf(concert.endsAt), start + 6);
         const big = end - start >= 18;
+        const live = now !== null && isPlaying(concert, now);
         return (
           <button
             key={concert.id}
             onClick={() => onOpen(concert)}
             className={`concert-block rough-bg mx-[8%] px-2 text-center ${
               !eligible ? "is-dimmed" : ""
-            } ${clashing.length ? "is-clashing clash-pulse" : ""}`}
+            } ${clashing.length ? "is-clashing clash-pulse" : ""} ${
+              live ? "is-live" : ""
+            }`}
             style={
               {
                 gridColumn: col + 1,
@@ -219,6 +286,7 @@ function StageGrid({
               {concert.band}
             </span>
             <span className="font-cond block text-xs font-semibold opacity-90">
+              {live && <span className="live-dot mr-1.5 align-middle" />}
               {fmtRange(concert)}
             </span>
             <TagDots concertId={concert.id} />
@@ -233,27 +301,39 @@ function AgendaList({
   blocks,
   stageOf,
   hideIneligible,
+  nowMinutes,
+  now,
   onOpen,
 }: {
   blocks: Map<string, BlockMeta>;
   stageOf: (id: string) => Stage | undefined;
   hideIneligible: boolean;
+  nowMinutes: number | null;
+  now: Date | null;
   onOpen: (c: Concert) => void;
 }) {
   const rows = [...blocks.values()]
     .filter((b) => b.eligible || !hideIneligible)
     .sort((a, b) => a.concert.startsAt.localeCompare(b.concert.startsAt));
+  // The NOW divider sits before the first set that hasn't started yet.
+  const nowIndex =
+    now !== null && nowMinutes !== null
+      ? rows.findIndex((r) => new Date(r.concert.startsAt) > now)
+      : -1;
+  const nowAt = nowIndex === -1 && nowMinutes !== null ? rows.length : nowIndex;
   return (
     <ul className="space-y-2">
-      {rows.map(({ concert, eligible, clashing }) => {
+      {rows.map(({ concert, eligible, clashing }, i) => {
         const stage = stageOf(concert.stageId);
+        const live = now !== null && isPlaying(concert, now);
         return (
           <li key={concert.id}>
+            {i === nowAt && <NowDivider now={now} />}
             <button
               onClick={() => onOpen(concert)}
               className={`concert-block rough-bg-sm flex w-full items-center gap-3 px-3 py-2.5 text-left ${
                 !eligible ? "is-dimmed" : ""
-              } ${clashing.length ? "is-clashing" : ""}`}
+              } ${clashing.length ? "is-clashing" : ""} ${live ? "is-live" : ""}`}
               style={
                 {
                   "--block-bg": `color-mix(in srgb, ${stage?.color ?? "#555"} 80%, #000)`,
@@ -272,6 +352,7 @@ function AgendaList({
                   {concert.band}
                 </span>
                 <span className="font-cond block text-xs uppercase tracking-wider opacity-80">
+                  {live && <span className="live-dot mr-1.5 align-middle" />}
                   {stage?.name} · {fmtRange(concert)}
                 </span>
               </span>
@@ -281,7 +362,24 @@ function AgendaList({
           </li>
         );
       })}
+      {nowAt === rows.length && rows.length > 0 && (
+        <li>
+          <NowDivider now={now} />
+        </li>
+      )}
     </ul>
+  );
+}
+
+function NowDivider({ now }: { now: Date | null }) {
+  return (
+    <div className="mb-2 flex items-center gap-2" aria-label="current time">
+      <span className="live-dot" />
+      <span className="font-display text-xs text-clash">
+        NOW{now ? ` · ${fmtTime(now.toISOString())}` : ""}
+      </span>
+      <span className="h-0.5 flex-1 bg-clash/70 shadow-[0_0_8px_rgba(255,59,48,0.7)]" />
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/client/api";
-import { DAY_LABELS, fmtTime } from "@/lib/time";
+import { DAY_DATES, DAY_LABELS, fmtTime } from "@/lib/time";
 import type { Concert, Schedule, Tag } from "@/lib/types";
 import { Sheet, SheetTitle } from "@/components/Sheet";
 
@@ -11,10 +11,10 @@ import { Sheet, SheetTitle } from "@/components/Sheet";
 // the *next* calendar date relative to the festival day.
 function toIso(dayDate: string, hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);
-  const d = new Date(`${dayDate}T00:00:00+03:00`);
-  if (h < 5) d.setUTCDate(d.getUTCDate() + 1);
-  d.setUTCHours(h - 3, m, 0, 0);
-  return d.toISOString();
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  const t = new Date(`${dayDate}T${hh}:${mm}:00+03:00`).getTime();
+  return new Date(h < 5 ? t + 24 * 3600_000 : t).toISOString();
 }
 
 export function AdminApp({
@@ -254,15 +254,6 @@ function GlobalTags({
     </div>
   );
 }
-
-const DAY_DATES: Record<number, string> = {
-  1: "2026-07-27",
-  2: "2026-07-28",
-  3: "2026-07-29",
-  4: "2026-07-30",
-  5: "2026-07-31",
-  6: "2026-08-01",
-};
 
 function ConcertEditor({
   concert,

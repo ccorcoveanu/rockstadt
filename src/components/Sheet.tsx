@@ -33,6 +33,7 @@ export function Sheet({
   children: ReactNode;
   labelledBy?: string;
 }) {
+  const [mounted, setMounted] = useState(false);
   const [shown, setShown] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -45,6 +46,7 @@ export function Sheet({
   }, [onClose]);
 
   useEffect(() => {
+    setMounted(true);
     // Timeout, not rAF: rAF never fires in hidden/background tabs, which
     // would leave the sheet permanently translated off-screen.
     const enter = window.setTimeout(() => setShown(true), 20);
@@ -96,6 +98,9 @@ export function Sheet({
       panel.style.transform = "";
     }
   }
+
+  // No document during SSR — the sheet only exists client-side anyway.
+  if (!mounted) return null;
 
   // Portal to <body>: ancestors with transforms/animations (e.g. .rise-in)
   // would otherwise become the containing block and break position: fixed.

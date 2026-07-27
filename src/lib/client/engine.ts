@@ -404,10 +404,12 @@ export class SyncEngine {
     await this.reload();
   }
 
-  // Sharing needs the server to answer the link, so it is online + account only.
+  // Sharing needs the server to answer the link. Signed-in calendars get a
+  // live link; anonymous ones upload a frozen snapshot revocable only from
+  // this device (the secret never leaves it).
   async setCalendarSharing(id: string, enabled: boolean): Promise<string | null> {
-    if (!this.state.user) throw new ApiError(401, "Sign in to share calendars");
     if (!this.state.online) throw new ApiError(0, "Sharing needs a connection");
+    if (!this.state.user) return this.setAnonymousSharing(id, enabled);
     if (id.startsWith(LOCAL_CAL_PREFIX)) {
       await this.pushPending();
       const serverId = this.calIdMap.get(id);
@@ -416,6 +418,46 @@ export class SyncEngine {
     }
     const { calendar, url } = await api.shareCalendar(id, enabled);
     await db.calendars.put(calendar);
+    await this.reload();
+    return url;
+  }
+
+  private async setAnonymousSharing(id: string, enabled: boolean): Promise<string | null> {
+    const cal = this.state.calendars.find((c) => c.id === id);
+    if (!cal) throw new ApiError(404, "Calendar not found");
+    const kvKey = `share:${id}`;
+    if (!enabled) {
+      const info = await kvGet<{ token: string; secret: string }>(kvKey);
+      if (info) {
+        await api.revokeSnapshotShare(info.token, info.secret).catch(() => undefined);
+        await kvSet(kvKey, null);
+      }
+      await db.calendars.put({ ...cal, shareToken: null, shareEnabled: false });
+      await this.reload();
+      return null;
+    }
+    const tagSet = new Set(cal.tagIds);
+    const byId = new Map(this.state.tags.map((t) => [t.id, t]));
+    const tags = cal.tagIds
+      .map((tid) => byId.get(tid))
+      .filter((t): t is Tag => !!t)
+      .map((t) => ({
+        slug: t.slug,
+        name: t.name,
+        color: t.color,
+        global: t.ownerId === GLOBAL_OWNER,
+      }));
+    const assignments = [...this.state.assignments.values()]
+      .filter((a) => a.active && tagSet.has(a.tagId))
+      .map((a) => ({ concertId: a.concertId, tagSlug: byId.get(a.tagId)!.slug }));
+    const { token, secret, url } = await api.createSnapshotShare({
+      calendarName: cal.name,
+      ownerName: "A fellow metalhead",
+      tags,
+      assignments,
+    });
+    await kvSet(kvKey, { token, secret });
+    await db.calendars.put({ ...cal, shareToken: token, shareEnabled: true });
     await this.reload();
     return url;
   }

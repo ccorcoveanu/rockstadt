@@ -183,8 +183,26 @@ await ensure(
   "calendars.isDefault"
 );
 
+// Frozen snapshots back anonymous shares (no account to serve live data from).
+await ensure(
+  () => tables.createTable({ databaseId, tableId: "snapshots", name: "Shared snapshots" }),
+  "snapshots"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "snapshots", key: "name", size: 128, required: true }),
+  "snapshots.name"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "snapshots", key: "data", size: 300000, required: true }),
+  "snapshots.data"
+);
+await ensure(
+  () => tables.createStringColumn({ databaseId, tableId: "snapshots", key: "secret", size: 64, required: true }),
+  "snapshots.secret"
+);
+
 console.log("Waiting for columns…");
-for (const t of ["stages", "concerts", "tags", "tag_assignments", "calendars"]) await waitForColumns(t);
+for (const t of ["stages", "concerts", "tags", "tag_assignments", "calendars", "snapshots"]) await waitForColumns(t);
 ok("all columns available");
 
 console.log("Indexes");

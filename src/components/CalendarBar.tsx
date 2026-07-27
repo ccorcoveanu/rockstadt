@@ -44,11 +44,11 @@ export function CalendarBar({
       {state.calendars.map((c) => (
         <span
           key={c.id}
-          className="inline-flex items-center gap-0.5 rounded-md bg-white/[0.03] pr-1"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.03] pr-1.5"
         >
           <button
             onClick={() => onApply(new Set(c.tagIds))}
-            className={`rough-bg-sm px-3 py-1 font-cond text-sm font-semibold uppercase tracking-wide ${
+            className={`rough-bg-sm px-3 py-2 font-cond text-sm font-semibold uppercase tracking-wide ${
               c.id === activeCalendarId
                 ? "[--block-bg:var(--ink)] text-bg"
                 : "[--block-bg:var(--bg-raised)] text-ink/90 hover:text-ink"
@@ -60,7 +60,7 @@ export function CalendarBar({
           <button
             title={c.isDefault ? "Default calendar (shown on open)" : "Make default"}
             onClick={() => void engine.setDefaultCalendar(c.id, !c.isDefault)}
-            className={`px-1 text-base leading-none ${
+            className={`min-w-10 px-2 py-2 text-lg leading-none ${
               c.isDefault ? "text-gold" : "text-muted hover:text-gold"
             }`}
           >
@@ -69,7 +69,7 @@ export function CalendarBar({
           <button
             title="Share"
             onClick={() => setSharing(c)}
-            className="px-1 text-sm leading-none text-muted hover:text-[var(--stage-magenta)]"
+            className="min-w-10 px-2 py-2 text-base leading-none text-muted hover:text-[var(--stage-magenta)]"
           >
             ↗
           </button>
@@ -80,7 +80,7 @@ export function CalendarBar({
                 void engine.removeCalendar(c.id);
               }
             }}
-            className="px-1 text-sm leading-none text-muted hover:text-clash"
+            className="min-w-10 px-2 py-2 text-base leading-none text-muted hover:text-clash"
           >
             ✕
           </button>
@@ -170,20 +170,15 @@ function ShareDialog({
 
       <p className="mt-2 font-cond text-sm text-muted">
         Anyone with the link can import this calendar — your selected tags and
-        the concerts you tagged with them. The link stays live: it always
-        serves your current picks. Turn it off any time.
+        the concerts you tagged with them.{" "}
+        {state.user
+          ? "The link stays live: it always serves your current picks. Turn it off any time."
+          : "Without an account the link carries a frozen copy of your picks as they are right now — disable and share again after changes, or sign in for a live link."}
       </p>
-
-      {!state.user && (
-        <p className="mt-3 border-l-2 border-gold pl-2 font-cond text-sm text-gold">
-          Sharing needs an account (the link is served for you while you sleep
-          in the tent). Sign in first.
-        </p>
-      )}
 
       <div className="mt-4 flex items-center gap-3">
         <button
-          disabled={busy || !state.user}
+          disabled={busy}
           onClick={() => void toggle(!url)}
           className={`rough-bg-sm px-3 py-1.5 font-cond text-sm font-bold uppercase disabled:opacity-50 ${
             url

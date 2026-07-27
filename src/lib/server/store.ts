@@ -357,6 +357,55 @@ export async function buildSnapshot(
   };
 }
 
+// Anonymous shares: frozen snapshot rows keyed by token, revocable via secret.
+export async function createSnapshotShare(
+  token: string,
+  secret: string,
+  snapshot: CalendarSnapshot
+): Promise<void> {
+  const { tables } = adminClient();
+  await tables.createRow<Models.DefaultRow>({
+    databaseId: env.databaseId,
+    tableId: TABLES.snapshots,
+    rowId: token,
+    data: { name: snapshot.calendarName, secret, data: JSON.stringify(snapshot) },
+  });
+}
+
+export async function findSnapshotShare(token: string): Promise<CalendarSnapshot | null> {
+  const { tables } = adminClient();
+  try {
+    const r = (await tables.getRow({
+      databaseId: env.databaseId,
+      tableId: TABLES.snapshots,
+      rowId: token,
+    })) as Row;
+    return JSON.parse(r.data as string) as CalendarSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteSnapshotShare(token: string, secret: string): Promise<boolean> {
+  const { tables } = adminClient();
+  try {
+    const r = (await tables.getRow({
+      databaseId: env.databaseId,
+      tableId: TABLES.snapshots,
+      rowId: token,
+    })) as Row;
+    if ((r.secret as string) !== secret) return false;
+    await tables.deleteRow({
+      databaseId: env.databaseId,
+      tableId: TABLES.snapshots,
+      rowId: token,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function createConcert(data: Omit<Concert, "id">): Promise<Concert> {
   const { tables } = adminClient();
   const { ID } = await import("node-appwrite");

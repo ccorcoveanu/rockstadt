@@ -84,6 +84,16 @@ export const api = {
     ),
   shareSnapshot: (token: string) =>
     request<{ snapshot: CalendarSnapshot }>(`/api/shares/${token}`),
+  createSnapshotShare: (snapshot: CalendarSnapshot) =>
+    request<{ token: string; secret: string; url: string }>("/api/shares", {
+      method: "POST",
+      body: JSON.stringify(snapshot),
+    }),
+  revokeSnapshotShare: (token: string, secret: string) =>
+    request<{ ok: true }>(`/api/shares/${token}`, {
+      method: "DELETE",
+      headers: { "x-share-secret": secret },
+    }),
   adminCreateGlobalTag: (name: string, color: string) =>
     request<{ tag: Tag }>("/api/admin/tags", {
       method: "POST",

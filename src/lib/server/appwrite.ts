@@ -33,6 +33,7 @@ export const TABLES = {
   tags: "tags",
   assignments: "tag_assignments",
   calendars: "calendars",
+  snapshots: "snapshots",
 } as const;
 
 export const ADMIN_TEAM_ID = "admins";

@@ -209,7 +209,8 @@ body::after {
   height: 2px;
   background: var(--clash);
   box-shadow: 0 0 10px rgba(255, 59, 48, 0.85);
-  z-index: 5;
+  /* above .is-live cards (25) and hover (30) */
+  z-index: 35;
 }
 
 .agenda-now-line::before {

@@ -7,7 +7,6 @@ import {
   DAY_LABELS,
   findClashes,
   fmtRange,
-  fmtTime,
   hourMarks,
   isPlaying,
   nowIntoDay,
@@ -143,9 +142,9 @@ export function Calendar({
         />
       </div>
 
-      {/* Mobile: agenda list */}
+      {/* Mobile: single-column timeline; overlapping sets share the width */}
       <div className="md:hidden">
-        <AgendaList
+        <MobileTimeline
           blocks={blocks}
           stageOf={stageOf}
           hideIneligible={hideIneligible}
@@ -307,7 +306,40 @@ function StageGrid({
   );
 }
 
-function AgendaList({
+// Calendar-style column packing: overlapping sets split the width and sit
+// side by side at their true time position.
+const PACK_COLS = 12; // divisible by 1..4 concurrent sets
+
+function packColumns(concerts: Concert[]): Map<string, { col: number; of: number }> {
+  const sorted = [...concerts].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const placement = new Map<string, { col: number; of: number }>();
+  let cluster: { concert: Concert; col: number }[] = [];
+  let clusterEnd = "";
+
+  const flush = () => {
+    if (cluster.length === 0) return;
+    const of = Math.max(...cluster.map((m) => m.col)) + 1;
+    for (const m of cluster) placement.set(m.concert.id, { col: m.col, of });
+    cluster = [];
+  };
+
+  for (const c of sorted) {
+    if (cluster.length > 0 && c.startsAt >= clusterEnd) flush();
+    const colEnds = new Map<number, string>();
+    for (const m of cluster) {
+      const end = colEnds.get(m.col);
+      if (!end || m.concert.endsAt > end) colEnds.set(m.col, m.concert.endsAt);
+    }
+    let col = 0;
+    while ((colEnds.get(col) ?? "") > c.startsAt) col++;
+    cluster.push({ concert: c, col });
+    if (c.endsAt > clusterEnd) clusterEnd = c.endsAt;
+  }
+  flush();
+  return placement;
+}
+
+function MobileTimeline({
   blocks,
   stageOf,
   hideIneligible,
@@ -322,28 +354,14 @@ function AgendaList({
   now: Date | null;
   onOpen: (c: Concert) => void;
 }) {
-  const rows = [...blocks.values()]
-    .filter((b) => b.eligible || !hideIneligible)
-    .sort((a, b) => a.concert.startsAt.localeCompare(b.concert.startsAt));
-  // While something plays, the NOW line is drawn across the live card(s) at
-  // the set's progress position; the standalone divider only appears in gaps
-  // (above the first set that hasn't started yet).
-  const anyLive =
-    now !== null && nowMinutes !== null && rows.some((r) => isPlaying(r.concert, now));
-  const nowIndex =
-    now !== null && nowMinutes !== null && !anyLive
-      ? rows.findIndex((r) => new Date(r.concert.startsAt) > now)
-      : -1;
-  const nowAt =
-    nowIndex === -1 && nowMinutes !== null && !anyLive ? rows.length : nowIndex;
-  const firstLiveIdx =
-    anyLive && now !== null ? rows.findIndex((r) => isPlaying(r.concert, now)) : -1;
-  const anchorIdx = anyLive ? firstLiveIdx : nowAt;
-  const nowRef = useRef<HTMLLIElement>(null);
-  const hasAnchor = anchorIdx >= 0 || nowAt === rows.length;
+  const visible = [...blocks.values()].filter((b) => b.eligible || !hideIneligible);
+  const placement = packColumns(visible.map((b) => b.concert));
+  const marks = hourMarks();
+  const nowSlot = nowMinutes !== null ? Math.round(nowMinutes / SLOT_MIN) : null;
+  const nowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!hasAnchor) return;
+    if (nowSlot === null) return;
     // Same centering jump as the grid; no-ops while this view is display:none.
     const t = setTimeout(() => {
       nowRef.current?.scrollIntoView({
@@ -352,76 +370,94 @@ function AgendaList({
       });
     }, 400);
     return () => clearTimeout(t);
-  }, [hasAnchor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowSlot !== null]);
 
   return (
-    <ul className="space-y-2">
-      {rows.map(({ concert, eligible, clashing }, i) => {
+    <div
+      className="relative grid gap-x-1"
+      style={{
+        gridTemplateColumns: `2.5rem repeat(${PACK_COLS}, 1fr)`,
+        gridTemplateRows: `repeat(${SLOTS_PER_DAY}, 0.55rem)`,
+      }}
+    >
+      {marks.map((m) => (
+        <div
+          key={m.slot}
+          className="pointer-events-none relative"
+          style={{ gridColumn: `2 / -1`, gridRow: m.slot + 1 }}
+        >
+          <div className="time-rule absolute inset-x-0 top-0" />
+        </div>
+      ))}
+      {marks.map((m) => (
+        <div
+          key={`l${m.slot}`}
+          className="relative -top-2 pr-1 text-right font-display text-xs text-ink/80"
+          style={{ gridColumn: 1, gridRow: m.slot + 1 }}
+        >
+          {m.label}
+        </div>
+      ))}
+
+      {nowSlot !== null && (
+        <div
+          ref={nowRef}
+          className="now-line"
+          style={{
+            gridColumn: "1 / -1",
+            gridRow: Math.min(nowSlot, SLOTS_PER_DAY - 1) + 1,
+          }}
+        >
+          <span className="now-dot" />
+          <span className="absolute -top-2 left-4 rounded bg-clash px-1.5 py-px font-display text-[10px] tracking-wider text-white shadow-[0_0_10px_rgba(255,59,48,0.8)]">
+            NOW
+          </span>
+        </div>
+      )}
+
+      {visible.map(({ concert, eligible, clashing }) => {
         const stage = stageOf(concert.stageId);
         const live = now !== null && isPlaying(concert, now);
-        const progress = live
-          ? (now.getTime() - new Date(concert.startsAt).getTime()) /
-            (new Date(concert.endsAt).getTime() - new Date(concert.startsAt).getTime())
-          : 0;
+        const start = slotOf(concert.startsAt);
+        const end = Math.max(slotOf(concert.endsAt), start + 7);
+        const place = placement.get(concert.id) ?? { col: 0, of: 1 };
+        const span = Math.floor(PACK_COLS / place.of);
+        const narrow = place.of >= 2;
         return (
-          <li key={concert.id} ref={i === anchorIdx ? nowRef : undefined} className="relative">
-            {i === nowAt && <NowDivider now={now} />}
-            {live && (
-              <span
-                className="agenda-now-line"
-                style={{ top: `${Math.min(96, Math.max(4, progress * 100))}%` }}
-              />
-            )}
-            <button
-              onClick={() => onOpen(concert)}
-              className={`concert-block rough-bg-sm flex w-full items-center gap-3 px-3 py-2.5 text-left ${
-                !eligible ? "is-dimmed" : ""
-              } ${clashing.length ? "is-clashing" : ""} ${live ? "is-live" : ""}`}
-              style={
-                {
-                  "--block-bg": `color-mix(in srgb, ${stage?.color ?? "#555"} 80%, #000)`,
-                } as React.CSSProperties
-              }
+          <button
+            key={concert.id}
+            onClick={() => onOpen(concert)}
+            className={`concert-block rough-bg-sm px-1.5 py-1 text-center ${
+              !eligible ? "is-dimmed" : ""
+            } ${clashing.length ? "is-clashing clash-pulse" : ""} ${live ? "is-live" : ""}`}
+            style={
+              {
+                gridColumn: `${2 + place.col * span} / span ${span}`,
+                gridRow: `${start + 1} / ${end + 1}`,
+                "--block-bg": stage?.color ?? "#555",
+              } as React.CSSProperties
+            }
+          >
+            <span
+              className={`font-display block leading-tight ${
+                narrow ? "text-[0.72rem]" : "text-base"
+              }`}
             >
-              <span className="font-display w-12 shrink-0 text-sm">
-                {fmtTime(concert.startsAt)}
-              </span>
-              <span
-                className="h-8 w-1 shrink-0"
-                style={{ background: stage?.color }}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="font-display block truncate text-base leading-tight">
-                  {concert.band}
-                </span>
-                <span className="font-cond block text-xs uppercase tracking-wider opacity-80">
-                  {live && <span className="live-dot mr-1.5 align-middle" />}
-                  {stage?.name} · {fmtRange(concert)}
-                </span>
-              </span>
-              <TagDots concertId={concert.id} />
-              {clashing.length > 0 && <span className="text-clash">⚠</span>}
-            </button>
-          </li>
+              {concert.band}
+            </span>
+            <span
+              className={`font-cond block font-semibold opacity-90 ${
+                narrow ? "text-[0.6rem]" : "text-xs"
+              }`}
+            >
+              {live && <span className="live-dot mr-1 align-middle" />}
+              {fmtRange(concert)}
+            </span>
+            <TagDots concertId={concert.id} />
+          </button>
         );
       })}
-      {nowAt === rows.length && rows.length > 0 && (
-        <li ref={anchorIdx < 0 ? nowRef : undefined}>
-          <NowDivider now={now} />
-        </li>
-      )}
-    </ul>
-  );
-}
-
-function NowDivider({ now }: { now: Date | null }) {
-  return (
-    <div className="mb-2 flex items-center gap-2" aria-label="current time">
-      <span className="live-dot" />
-      <span className="font-display text-xs text-clash">
-        NOW{now ? ` · ${fmtTime(now.toISOString())}` : ""}
-      </span>
-      <span className="h-0.5 flex-1 bg-clash/70 shadow-[0_0_8px_rgba(255,59,48,0.7)]" />
     </div>
   );
 }

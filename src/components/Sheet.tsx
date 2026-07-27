@@ -46,6 +46,9 @@ export function Sheet({
   }, [onClose]);
 
   useEffect(() => {
+    // Portal can only exist client-side; this one-shot flip after hydration
+    // is the standard SSR-safe portal pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     // Timeout, not rAF: rAF never fires in hidden/background tabs, which
     // would leave the sheet permanently translated off-screen.

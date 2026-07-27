@@ -203,51 +203,6 @@ body::after {
   box-shadow: 0 0 14px rgba(255, 59, 48, 1);
 }
 
-/* NOW line crossing a playing agenda card at its progress position */
-.agenda-now-line {
-  pointer-events: none;
-  position: absolute;
-  left: -8px;
-  right: -8px;
-  height: 3px;
-  background: var(--clash);
-  /* dark rim keeps it readable on any card color */
-  box-shadow:
-    0 0 0 1px rgba(10, 4, 8, 0.75),
-    0 0 14px rgba(255, 59, 48, 0.95);
-  /* above .is-live cards (25) and hover (30) */
-  z-index: 35;
-}
-
-.agenda-now-line::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: -6px;
-  height: 15px;
-  width: 15px;
-  border-radius: 999px;
-  background: var(--clash);
-  border: 2px solid rgba(10, 4, 8, 0.8);
-  box-shadow: 0 0 14px rgba(255, 59, 48, 1);
-}
-
-.agenda-now-line::after {
-  content: "NOW";
-  position: absolute;
-  right: 0;
-  top: -8px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--clash);
-  color: #fff;
-  font-family: var(--font-anton), sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  line-height: 1.5;
-  box-shadow: 0 0 10px rgba(255, 59, 48, 0.8);
-}
-
 @keyframes live-blink {
   0%,
   100% {

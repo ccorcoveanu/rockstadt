@@ -40,6 +40,7 @@ export type SavedCalendar = {
   tagIds: string[];
   shareToken: string | null;
   shareEnabled: boolean;
+  isDefault: boolean;
 };
 
 // What a share link resolves to: enough to rebuild the calendar in another

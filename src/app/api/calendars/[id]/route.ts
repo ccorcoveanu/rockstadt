@@ -7,6 +7,7 @@ import { deleteCalendar, getCalendar, updateCalendar } from "@/lib/server/store"
 const Body = z.object({
   name: z.string().min(1).max(128).optional(),
   tagIds: z.array(z.string().min(1).max(64)).min(1).max(50).optional(),
+  isDefault: z.boolean().optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };

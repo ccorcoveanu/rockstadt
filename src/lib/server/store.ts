@@ -232,6 +232,7 @@ function toCalendar(r: Row): SavedCalendar {
     tagIds: (r.tagIds as string[]) ?? [],
     shareToken: (r.shareToken as string | null) ?? null,
     shareEnabled: Boolean(r.shareEnabled),
+    isDefault: Boolean(r.isDefault),
   };
 }
 
@@ -265,14 +266,43 @@ export async function createCalendar(data: {
     databaseId: env.databaseId,
     tableId: TABLES.calendars,
     rowId: ID.unique(),
-    data: { ...data, shareToken: null, shareEnabled: false },
+    data: { ...data, shareToken: null, shareEnabled: false, isDefault: false },
   })) as Row;
   return toCalendar(r);
 }
 
+// Setting isDefault=true clears the flag from the owner's other calendars.
 export async function updateCalendar(
   id: string,
-  data: Partial<Pick<SavedCalendar, "name" | "tagIds" | "shareToken" | "shareEnabled">>
+  data: Partial<
+    Pick<SavedCalendar, "name" | "tagIds" | "shareToken" | "shareEnabled" | "isDefault">
+  >
+): Promise<SavedCalendar> {
+  if (data.isDefault) {
+    const current = await getCalendar(id);
+    if (current) {
+      const siblings = await listCalendars(current.ownerId);
+      const { tables } = adminClient();
+      await Promise.all(
+        siblings
+          .filter((s) => s.id !== id && s.isDefault)
+          .map((s) =>
+            tables.updateRow({
+              databaseId: env.databaseId,
+              tableId: TABLES.calendars,
+              rowId: s.id,
+              data: { isDefault: false },
+            })
+          )
+      );
+    }
+  }
+  return updateCalendarRow(id, data);
+}
+
+async function updateCalendarRow(
+  id: string,
+  data: Record<string, unknown>
 ): Promise<SavedCalendar> {
   const { tables } = adminClient();
   const r = (await tables.updateRow({

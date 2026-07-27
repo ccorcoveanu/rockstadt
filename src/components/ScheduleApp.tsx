@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DAY_DATES, DAY_LABELS } from "@/lib/time";
 import type { CalendarSnapshot } from "@/lib/types";
 import { FestivalProvider, useFestival, type InitialData } from "./Provider";
@@ -82,6 +82,18 @@ function Planner() {
       // Corrupt/absent persisted filter is not worth surfacing.
     }
   }, []);
+
+  // The default calendar wins over the last-used filter, once per page load
+  // (as soon as calendars are known — immediately when signed in, after boot
+  // for device-local ones).
+  const defaultApplied = useRef(false);
+  useEffect(() => {
+    if (defaultApplied.current || state.calendars.length === 0) return;
+    defaultApplied.current = true;
+    const def = state.calendars.find((c) => c.isDefault);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (def) setFilter(new Set(def.tagIds));
+  }, [state.calendars]);
 
   function changeFilter(next: Set<string>) {
     setFilter(next);

@@ -42,7 +42,10 @@ export function CalendarBar({
       </span>
 
       {state.calendars.map((c) => (
-        <span key={c.id} className="group relative inline-flex">
+        <span
+          key={c.id}
+          className="inline-flex items-center gap-0.5 rounded-md bg-white/[0.03] pr-1"
+        >
           <button
             onClick={() => onApply(new Set(c.tagIds))}
             className={`rough-bg-sm px-3 py-1 font-cond text-sm font-semibold uppercase tracking-wide ${
@@ -54,26 +57,33 @@ export function CalendarBar({
             {c.name}
             {c.shareEnabled && <span className="ml-1.5 text-xs opacity-70">⛓</span>}
           </button>
-          <span className="absolute -right-1.5 -top-1.5 hidden gap-0.5 group-hover:flex">
-            <button
-              title="Share"
-              onClick={() => setSharing(c)}
-              className="h-5 w-5 rounded-full bg-[var(--stage-magenta)] text-[10px] leading-5 text-white"
-            >
-              ↗
-            </button>
-            <button
-              title="Delete"
-              onClick={() => {
-                if (confirm(`Delete calendar "${c.name}"? Tags stay.`)) {
-                  void engine.removeCalendar(c.id);
-                }
-              }}
-              className="h-5 w-5 rounded-full bg-clash text-[10px] leading-5 text-white"
-            >
-              ✕
-            </button>
-          </span>
+          <button
+            title={c.isDefault ? "Default calendar (shown on open)" : "Make default"}
+            onClick={() => void engine.setDefaultCalendar(c.id, !c.isDefault)}
+            className={`px-1 text-base leading-none ${
+              c.isDefault ? "text-gold" : "text-muted hover:text-gold"
+            }`}
+          >
+            {c.isDefault ? "★" : "☆"}
+          </button>
+          <button
+            title="Share"
+            onClick={() => setSharing(c)}
+            className="px-1 text-sm leading-none text-muted hover:text-[var(--stage-magenta)]"
+          >
+            ↗
+          </button>
+          <button
+            title="Delete"
+            onClick={() => {
+              if (confirm(`Delete calendar "${c.name}"? Tags stay.`)) {
+                void engine.removeCalendar(c.id);
+              }
+            }}
+            className="px-1 text-sm leading-none text-muted hover:text-clash"
+          >
+            ✕
+          </button>
         </span>
       ))}
 

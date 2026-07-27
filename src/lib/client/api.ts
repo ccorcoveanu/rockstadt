@@ -67,7 +67,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, tagIds }),
     }),
-  updateCalendar: (id: string, data: { name?: string; tagIds?: string[] }) =>
+  updateCalendar: (
+    id: string,
+    data: { name?: string; tagIds?: string[]; isDefault?: boolean }
+  ) =>
     request<{ calendar: SavedCalendar }>(`/api/calendars/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

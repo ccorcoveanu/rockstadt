@@ -24,6 +24,7 @@ export type CalendarOp = {
   calendarId?: string;
   name?: string;
   tagIds?: string[];
+  isDefault?: boolean;
 };
 
 export type KvRow = { key: string; value: unknown };

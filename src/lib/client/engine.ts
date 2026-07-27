@@ -323,6 +323,7 @@ export class SyncEngine {
       tagIds,
       shareToken: null,
       shareEnabled: false,
+      isDefault: false,
     };
     await db.calendars.put(calendar);
     if (this.state.user) {
@@ -330,6 +331,26 @@ export class SyncEngine {
     }
     await this.reload();
     return calendar;
+  }
+
+  // One default per user: turning it on clears the flag everywhere else.
+  async setDefaultCalendar(id: string, on: boolean): Promise<void> {
+    for (const cal of await db.calendars.toArray()) {
+      const next = cal.id === id ? on : false;
+      if (cal.isDefault !== next) await db.calendars.put({ ...cal, isDefault: next });
+    }
+    if (!id.startsWith(LOCAL_CAL_PREFIX) && this.state.user) {
+      if (this.state.online) {
+        try {
+          await api.updateCalendar(id, { isDefault: on });
+        } catch {
+          await db.calOps.add({ op: "update", calendarId: id, isDefault: on } as never);
+        }
+      } else {
+        await db.calOps.add({ op: "update", calendarId: id, isDefault: on } as never);
+      }
+    }
+    await this.reload();
   }
 
   async updateCalendarMeta(
@@ -514,12 +535,20 @@ export class SyncEngine {
           // Referenced tag still unsynced (its create must have failed); retry later.
           continue;
         }
-        const { calendar } = await api.createCalendar(op.name!, op.tagIds!);
+        const wasDefault = (await db.calendars.get(op.localId!))?.isDefault ?? false;
+        let { calendar } = await api.createCalendar(op.name!, op.tagIds!);
+        if (wasDefault) {
+          ({ calendar } = await api.updateCalendar(calendar.id, { isDefault: true }));
+        }
         await db.calendars.delete(op.localId!);
         await db.calendars.put(calendar);
         this.calIdMap.set(op.localId!, calendar.id);
       } else if (op.op === "update") {
-        await api.updateCalendar(op.calendarId!, { name: op.name, tagIds: op.tagIds });
+        await api.updateCalendar(op.calendarId!, {
+          name: op.name,
+          tagIds: op.tagIds,
+          isDefault: op.isDefault,
+        });
       } else {
         try {
           await api.deleteCalendar(op.calendarId!);

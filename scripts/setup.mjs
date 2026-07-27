@@ -178,6 +178,10 @@ await ensure(
   () => tables.createBooleanColumn({ databaseId, tableId: "calendars", key: "shareEnabled", required: false, xdefault: false }),
   "calendars.shareEnabled"
 );
+await ensure(
+  () => tables.createBooleanColumn({ databaseId, tableId: "calendars", key: "isDefault", required: false, xdefault: false }),
+  "calendars.isDefault"
+);
 
 console.log("Waiting for columns…");
 for (const t of ["stages", "concerts", "tags", "tag_assignments", "calendars"]) await waitForColumns(t);

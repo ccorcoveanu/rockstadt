@@ -196,7 +196,7 @@ function ShareDialog({
             readOnly
             value={url}
             onFocus={(e) => e.target.select()}
-            className="flex-1 border border-white/10 bg-black/30 px-2 py-1.5 font-mono text-xs text-ink/90"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-2.5 font-mono text-xs text-ink/90"
           />
           <button
             onClick={() => {
@@ -205,10 +205,22 @@ function ShareDialog({
                 setTimeout(() => setCopied(false), 1500);
               });
             }}
-            className="rough-bg-sm [--block-bg:var(--stage-magenta)] px-3 py-1.5 font-cond text-sm font-bold uppercase text-white"
+            className="rough-bg-sm [--block-bg:var(--stage-magenta)] shrink-0 px-3 py-2.5 font-cond text-sm font-bold uppercase text-white"
           >
             {copied ? "Copied!" : "Copy"}
           </button>
+          {typeof navigator !== "undefined" && "share" in navigator && (
+            <button
+              onClick={() => {
+                void navigator
+                  .share({ title: `REF 2026 — ${live.name}`, url })
+                  .catch(() => undefined);
+              }}
+              className="rough-bg-sm [--block-bg:var(--stage-green)] shrink-0 px-3 py-2.5 font-cond text-sm font-bold uppercase text-black"
+            >
+              Share…
+            </button>
+          )}
         </div>
       )}
       {error && <p className="mt-3 text-sm text-clash">{error}</p>}

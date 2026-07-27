@@ -258,7 +258,7 @@ function StageGrid({
           }}
         >
           <span className="now-dot" />
-          <span className="absolute -top-2.5 right-0 font-display text-xs text-clash">
+          <span className="absolute -top-2 left-4 rounded bg-clash px-1.5 py-px font-display text-[10px] tracking-wider text-white shadow-[0_0_10px_rgba(255,59,48,0.8)]">
             NOW
           </span>
         </div>

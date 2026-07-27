@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { DAY_DATES, DAY_LABELS } from "@/lib/time";
 import type { CalendarSnapshot } from "@/lib/types";
+import type { Concert } from "@/lib/types";
 import { FestivalProvider, useFestival, type InitialData } from "./Provider";
+import { BandSearch } from "./BandSearch";
 import { Calendar } from "./Calendar";
 import { CalendarBar } from "./CalendarBar";
 import { Header } from "./Header";
 import { ImportDialog } from "./ImportDialog";
 import { TagBar } from "./TagBar";
+import { TagPopover } from "./TagPopover";
 
 const FILTER_KEY = "ref-filter";
 
@@ -102,9 +105,23 @@ function Planner() {
 
   const knownTagIds = new Set(state.tags.map((t) => t.id));
   const effectiveFilter = new Set([...filter].filter((id) => knownTagIds.has(id)));
+  const [searchPick, setSearchPick] = useState<Concert | null>(null);
+  const pickStage = searchPick
+    ? state.schedule?.stages.find((s) => s.id === searchPick.stageId)
+    : undefined;
 
   return (
     <main id="schedule" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20">
+      <BandSearch onPick={setSearchPick} />
+      {searchPick && (
+        <TagPopover
+          concert={searchPick}
+          stageName={pickStage?.name ?? ""}
+          stageColor={pickStage?.color ?? "#555"}
+          clashingWith={[]}
+          onClose={() => setSearchPick(null)}
+        />
+      )}
       <TagBar filter={effectiveFilter} onFilterChange={changeFilter} />
       <CalendarBar filter={effectiveFilter} onApply={changeFilter} />
 

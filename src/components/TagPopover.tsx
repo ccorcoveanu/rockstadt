@@ -1,7 +1,7 @@
 "use client";
 
 import type { Concert } from "@/lib/types";
-import { fmtRange } from "@/lib/time";
+import { DAY_LABELS, fmtRange } from "@/lib/time";
 import { useActiveTagIds, useFestival } from "./Provider";
 import { Sheet } from "./Sheet";
 
@@ -31,7 +31,10 @@ export function TagPopover({
         {concert.band}
       </div>
       <p className="mt-2 font-cond text-sm uppercase tracking-wider text-muted">
-        {stageName} · {fmtRange(concert)}
+        <span className="text-gold">
+          {DAY_LABELS[concert.day].title} · {DAY_LABELS[concert.day].date}
+        </span>{" "}
+        · {stageName} · {fmtRange(concert)}
         {concert.openEnded && " (open end)"}
       </p>
 

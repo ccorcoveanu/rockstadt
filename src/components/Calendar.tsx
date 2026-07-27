@@ -24,9 +24,8 @@ type BlockMeta = {
   clashing: Concert[];
 };
 
-// TEMPORARY (set to null for the real festival clock): freeze the site clock
-// at a fixed instant for testing the live view.
-const DEV_FIXED_NOW: string | null = "2026-07-27T19:00:00+03:00";
+// Test hook: freeze the site clock at a fixed instant (e.g. "2026-07-28T19:00:00+03:00").
+const DEV_FIXED_NOW: string | null = null;
 
 // Client-only clock, ticking every 30s; null during SSR/hydration so the
 // server and first client render agree. `?now=<ISO>` overrides for previews.

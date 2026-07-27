@@ -10,9 +10,12 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-for (const line of readFileSync(resolve(root, ".env.local"), "utf8").split("\n")) {
-  const m = line.match(/^([A-Z_]+)=(.*)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+for (const envFile of [".env.local", ".env"]) {
+  if (!existsSync(resolve(root, envFile))) continue;
+  for (const line of readFileSync(resolve(root, envFile), "utf8").split("\n")) {
+    const m = line.match(/^([A-Z_]+)=(.*)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+  }
 }
 
 const {

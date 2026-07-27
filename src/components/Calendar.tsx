@@ -320,17 +320,25 @@ function AgendaList({
   const rows = [...blocks.values()]
     .filter((b) => b.eligible || !hideIneligible)
     .sort((a, b) => a.concert.startsAt.localeCompare(b.concert.startsAt));
-  // The NOW divider sits right above what is still relevant: the first set
-  // that hasn't ended yet (playing sets included, finished ones skipped).
+  // While something plays, the NOW line is drawn across the live card(s) at
+  // the set's progress position; the standalone divider only appears in gaps
+  // (above the first set that hasn't started yet).
+  const anyLive =
+    now !== null && nowMinutes !== null && rows.some((r) => isPlaying(r.concert, now));
   const nowIndex =
-    now !== null && nowMinutes !== null
-      ? rows.findIndex((r) => new Date(r.concert.endsAt) > now)
+    now !== null && nowMinutes !== null && !anyLive
+      ? rows.findIndex((r) => new Date(r.concert.startsAt) > now)
       : -1;
-  const nowAt = nowIndex === -1 && nowMinutes !== null ? rows.length : nowIndex;
-  const nowRef = useRef<HTMLDivElement>(null);
+  const nowAt =
+    nowIndex === -1 && nowMinutes !== null && !anyLive ? rows.length : nowIndex;
+  const firstLiveIdx =
+    anyLive && now !== null ? rows.findIndex((r) => isPlaying(r.concert, now)) : -1;
+  const anchorIdx = anyLive ? firstLiveIdx : nowAt;
+  const nowRef = useRef<HTMLLIElement>(null);
+  const hasAnchor = anchorIdx >= 0 || nowAt === rows.length;
 
   useEffect(() => {
-    if (nowAt < 0) return;
+    if (!hasAnchor) return;
     // Same centering jump as the grid; no-ops while this view is display:none.
     const t = setTimeout(() => {
       nowRef.current?.scrollIntoView({
@@ -339,17 +347,26 @@ function AgendaList({
       });
     }, 400);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nowAt >= 0]);
+  }, [hasAnchor]);
 
   return (
     <ul className="space-y-2">
       {rows.map(({ concert, eligible, clashing }, i) => {
         const stage = stageOf(concert.stageId);
         const live = now !== null && isPlaying(concert, now);
+        const progress = live
+          ? (now.getTime() - new Date(concert.startsAt).getTime()) /
+            (new Date(concert.endsAt).getTime() - new Date(concert.startsAt).getTime())
+          : 0;
         return (
-          <li key={concert.id}>
-            {i === nowAt && <NowDivider now={now} innerRef={nowRef} />}
+          <li key={concert.id} ref={i === anchorIdx ? nowRef : undefined} className="relative">
+            {i === nowAt && <NowDivider now={now} />}
+            {live && (
+              <span
+                className="agenda-now-line"
+                style={{ top: `${Math.min(96, Math.max(4, progress * 100))}%` }}
+              />
+            )}
             <button
               onClick={() => onOpen(concert)}
               className={`concert-block rough-bg-sm flex w-full items-center gap-3 px-3 py-2.5 text-left ${
@@ -384,23 +401,17 @@ function AgendaList({
         );
       })}
       {nowAt === rows.length && rows.length > 0 && (
-        <li>
-          <NowDivider now={now} innerRef={nowRef} />
+        <li ref={anchorIdx < 0 ? nowRef : undefined}>
+          <NowDivider now={now} />
         </li>
       )}
     </ul>
   );
 }
 
-function NowDivider({
-  now,
-  innerRef,
-}: {
-  now: Date | null;
-  innerRef?: React.Ref<HTMLDivElement>;
-}) {
+function NowDivider({ now }: { now: Date | null }) {
   return (
-    <div ref={innerRef} className="mb-2 flex items-center gap-2" aria-label="current time">
+    <div className="mb-2 flex items-center gap-2" aria-label="current time">
       <span className="live-dot" />
       <span className="font-display text-xs text-clash">
         NOW{now ? ` · ${fmtTime(now.toISOString())}` : ""}

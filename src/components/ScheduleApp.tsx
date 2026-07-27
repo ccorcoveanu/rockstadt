@@ -53,11 +53,6 @@ function Hero() {
         <p className="font-display mt-4 text-xl text-gold sm:text-2xl">
           27 – 31 July 2026 <span className="text-muted">+</span> Tribute Day 1 Aug
         </p>
-        <p className="mx-auto mt-4 max-w-xl font-cond text-base text-muted">
-          Unofficial schedule planner. Tag the sets you care about, filter the
-          calendar, and see every clash before it hurts. Works fully offline —
-          add it to your home screen and plan from the pit.
-        </p>
       </div>
       <div
         aria-hidden
@@ -138,29 +133,7 @@ function Footer() {
     <footer className="border-t border-white/5 py-8">
       <div className="mx-auto max-w-6xl px-4 text-center font-cond text-sm text-muted">
         <p>
-          Fan-made planner. Times from the official timetable —{" "}
-          <a
-            href="https://rockstadtextremefest.ro/the-timetable-is-here/"
-            className="underline decoration-dotted underline-offset-4 hover:text-ink"
-            target="_blank"
-            rel="noreferrer"
-          >
-            rockstadtextremefest.ro
-          </a>
-          . Official posters:{" "}
-          {[1, 2, 3, 4, 5, 6].map((d) => (
-            <a
-              key={d}
-              href={`/api/posters/${d}`}
-              target="_blank"
-              rel="noreferrer"
-              className="underline decoration-dotted underline-offset-4 hover:text-ink"
-            >
-              {d === 6 ? "tribute" : `day ${d}`}
-              {d < 6 ? ", " : ""}
-            </a>
-          ))}
-          .
+          Made with <span className="text-clash">&lt;3</span> by Pairing Bits
         </p>
         <p className="mt-2">Stay hydrated. See you in the pit. 🤘</p>
       </div>

@@ -34,6 +34,15 @@ function now(): string {
   return new Date().toISOString();
 }
 
+// crypto.randomUUID only exists in secure contexts (https/localhost);
+// getRandomValues works everywhere.
+function uid(): string {
+  if ("randomUUID" in crypto) return crypto.randomUUID();
+  return [...crypto.getRandomValues(new Uint8Array(16))]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export class SyncEngine {
   private state: EngineState = {
     schedule: null,
@@ -234,7 +243,7 @@ export class SyncEngine {
         // Network/server hiccup: fall through to the offline path.
       }
     }
-    const localId = `${LOCAL_TAG_PREFIX}${crypto.randomUUID()}`;
+    const localId = `${LOCAL_TAG_PREFIX}${uid()}`;
     const tag: Tag = {
       id: localId,
       name,
@@ -315,7 +324,7 @@ export class SyncEngine {
         if (e instanceof ApiError && e.status !== 429 && e.status < 500) throw e;
       }
     }
-    const localId = `${LOCAL_CAL_PREFIX}${crypto.randomUUID()}`;
+    const localId = `${LOCAL_CAL_PREFIX}${uid()}`;
     const calendar: SavedCalendar = {
       id: localId,
       ownerId: this.state.user?.id ?? "anonymous",

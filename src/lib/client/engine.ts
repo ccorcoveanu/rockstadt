@@ -35,10 +35,12 @@ function now(): string {
 }
 
 // crypto.randomUUID only exists in secure contexts (https/localhost);
-// getRandomValues works everywhere.
+// getRandomValues works everywhere. The cast exists because lib.dom wrongly
+// types randomUUID as always present.
 function uid(): string {
-  if ("randomUUID" in crypto) return crypto.randomUUID();
-  return [...crypto.getRandomValues(new Uint8Array(16))]
+  const c = crypto as Crypto & { randomUUID?: () => string };
+  if (typeof c.randomUUID === "function") return c.randomUUID();
+  return [...c.getRandomValues(new Uint8Array(16))]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
